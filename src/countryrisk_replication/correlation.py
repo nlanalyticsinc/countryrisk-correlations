@@ -180,11 +180,11 @@ class RunResult:
 @dataclass
 class RunningStats:
     n: int = 0
-    sum_x: float = 0.0
-    sum_y: float = 0.0
-    sum_x2: float = 0.0
-    sum_y2: float = 0.0
-    sum_xy: float = 0.0
+    mean_x: float = 0.0
+    mean_y: float = 0.0
+    m2_x: float = 0.0
+    m2_y: float = 0.0
+    c_xy: float = 0.0
 
     def add_arrays(self, x: pd.Series, y: pd.Series) -> None:
         xv_all = pd.to_numeric(x, errors="coerce").to_numpy(dtype="float64", na_value=math.nan)
@@ -194,22 +194,43 @@ class RunningStats:
             return
         xv = xv_all[valid]
         yv = yv_all[valid]
-        self.n += int(len(xv))
-        self.sum_x += float(xv.sum())
-        self.sum_y += float(yv.sum())
-        self.sum_x2 += float((xv * xv).sum())
-        self.sum_y2 += float((yv * yv).sum())
-        self.sum_xy += float((xv * yv).sum())
+        batch_n = int(len(xv))
+        batch_mean_x = float(xv.mean())
+        batch_mean_y = float(yv.mean())
+        x_centered = xv - batch_mean_x
+        y_centered = yv - batch_mean_y
+        batch_m2_x = float((x_centered * x_centered).sum())
+        batch_m2_y = float((y_centered * y_centered).sum())
+        batch_c_xy = float((x_centered * y_centered).sum())
+
+        if self.n == 0:
+            self.n = batch_n
+            self.mean_x = batch_mean_x
+            self.mean_y = batch_mean_y
+            self.m2_x = batch_m2_x
+            self.m2_y = batch_m2_y
+            self.c_xy = batch_c_xy
+            return
+
+        old_n = self.n
+        total_n = old_n + batch_n
+        weight = old_n * batch_n / total_n
+        delta_x = batch_mean_x - self.mean_x
+        delta_y = batch_mean_y - self.mean_y
+
+        self.n = total_n
+        self.mean_x += delta_x * batch_n / total_n
+        self.mean_y += delta_y * batch_n / total_n
+        self.m2_x += batch_m2_x + delta_x * delta_x * weight
+        self.m2_y += batch_m2_y + delta_y * delta_y * weight
+        self.c_xy += batch_c_xy + delta_x * delta_y * weight
 
     def pearson(self) -> float | None:
         if self.n < 2:
             return None
-        cov = self.sum_xy - self.sum_x * self.sum_y / self.n
-        var_x = self.sum_x2 - self.sum_x * self.sum_x / self.n
-        var_y = self.sum_y2 - self.sum_y * self.sum_y / self.n
-        if var_x <= 0 or var_y <= 0:
+        if self.m2_x <= 0 or self.m2_y <= 0:
             return None
-        return cov / math.sqrt(var_x * var_y)
+        return self.c_xy / math.sqrt(self.m2_x * self.m2_y)
 
 
 def parse_args() -> argparse.Namespace:
