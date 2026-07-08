@@ -22,6 +22,12 @@ test = [
     "numpy>=1.26",
     "pytest>=8",
 ]
+dev = [
+    "mypy>=1.13,<2",
+    "numpy>=1.26",
+    "pytest>=8,<10",
+    "ruff>=0.8,<1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -29,3 +35,26 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 110
+src = ["src", "tests"]
+extend-exclude = ["correlation_tables.ipynb"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+check_untyped_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["pandas", "pandas.*"]
+ignore_missing_imports = true

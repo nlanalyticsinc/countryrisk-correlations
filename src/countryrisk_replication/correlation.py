@@ -17,13 +17,12 @@ import hashlib
 import math
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Callable
 
 import pandas as pd
-
 
 DTA_FILE = Path("data/original/FirmCountryQuarter_withexposure.dta")
 REPRODUCED_DIR = Path("data/reproduced_v1.0")
@@ -80,9 +79,7 @@ COUNTRY_SLUG_TO_CODE = {
 }
 
 CODE_TO_COUNTRY_SLUG = {
-    code: slug
-    for slug, code in COUNTRY_SLUG_TO_CODE.items()
-    if slug != "united-states-of-america"
+    code: slug for slug, code in COUNTRY_SLUG_TO_CODE.items() if slug != "united-states-of-america"
 }
 
 VARIANTS = {
@@ -145,13 +142,6 @@ def default_logger(message: str) -> None:
 
 
 @dataclass(frozen=True)
-class CountryFile:
-    code: str
-    slug: str
-    path: Path
-
-
-@dataclass(frozen=True)
 class RunConfig:
     dta_file: Path = DTA_FILE
     reproduced_dir: Path = REPRODUCED_DIR
@@ -171,7 +161,7 @@ class ReproducedPanelResult:
 
 @dataclass(frozen=True)
 class ScanDtaResult:
-    stats: dict[tuple[int, str], "RunningStats"]
+    stats: dict[tuple[int, str], RunningStats]
     quarter_acc: dict[tuple[int, int, str], list[float]]
     rows_by_country: dict[int, int]
     total_rows: int
@@ -296,7 +286,7 @@ def file_sha256(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def parse_country_file(path: Path) -> CountryFile | None:
+def country_code_from_reproduced_file(path: Path) -> str | None:
     match = re.search(r"_countryrisk-(?P<slug>.+?)-v[^_]+_[^_]+_firmlevel\.csv$", path.name)
     if not match:
         return None
@@ -304,7 +294,7 @@ def parse_country_file(path: Path) -> CountryFile | None:
     code = COUNTRY_SLUG_TO_CODE.get(slug)
     if code is None:
         return None
-    return CountryFile(code=code.upper(), slug=slug, path=path)
+    return code.upper()
 
 
 def discover_reproduced_files(
@@ -318,11 +308,10 @@ def discover_reproduced_files(
     selected: dict[str, Path] = {}
     skipped: list[str] = []
     for path in sorted(reproduced_dir.glob("*.csv")):
-        parsed = parse_country_file(path)
-        if parsed is None:
+        code = country_code_from_reproduced_file(path)
+        if code is None:
             skipped.append(path.name)
             continue
-        code = parsed.code.upper()
         if countries is not None and code not in countries:
             continue
 
@@ -398,10 +387,7 @@ def stata_internal_carry_forward(
     anchor_observed = balanced["rep_observed_risk"].notna()
     has_prior_observed = anchor_observed.groupby(balanced["gvkey_num"]).cummax()
     has_future_observed = (
-        anchor_observed.iloc[::-1]
-        .groupby(balanced["gvkey_num"].iloc[::-1])
-        .cummax()
-        .iloc[::-1]
+        anchor_observed.iloc[::-1].groupby(balanced["gvkey_num"].iloc[::-1]).cummax().iloc[::-1]
     )
     internal_gap = balanced["rep_observed_risk"].isna() & has_prior_observed & has_future_observed
 
@@ -462,7 +448,7 @@ def build_reproduced_panel(
                         "rep_observed_risk": SCORE_SCALE * numeric.loc[valid, "risk"] / words.loc[valid],
                     }
                 )
-        )
+            )
 
         if not country_parts:
             if logger is not None:
@@ -533,9 +519,9 @@ def add_quarter_stats(
     metric_frame = merged[["country_id", "quarter_code", "dta_risk", rep_col]].dropna()
     if metric_frame.empty:
         return
-    grouped = metric_frame.groupby(["country_id", "quarter_code"], observed=True)[
-        ["dta_risk", rep_col]
-    ].agg(["sum", "count"])
+    grouped = metric_frame.groupby(["country_id", "quarter_code"], observed=True)[["dta_risk", rep_col]].agg(
+        ["sum", "count"]
+    )
     for (country_id, quarter_code), row in grouped.iterrows():
         count = int(row[("dta_risk", "count")])
         if count <= 0:
@@ -612,8 +598,7 @@ def scan_dta(
 
         if logger is not None and chunk_index % 10 == 0:
             logger(
-                f"[dta] chunks={chunk_index}, read={rows_read:,}, joined={matched_rows:,} "
-                f"({elapsed(start)})",
+                f"[dta] chunks={chunk_index}, read={rows_read:,}, joined={matched_rows:,} ({elapsed(start)})",
             )
 
     if logger is not None:

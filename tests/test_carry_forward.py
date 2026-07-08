@@ -18,7 +18,7 @@ def panel(rows: list[tuple[int, int, float]]) -> pd.DataFrame:
 
 
 def quarter_values(filled: pd.DataFrame) -> dict[int, float]:
-    return dict(zip(filled["quarter_code"], filled["rep_filled_risk"]))
+    return dict(zip(filled["quarter_code"], filled["rep_filled_risk"], strict=True))
 
 
 def test_internal_gap_up_to_four_quarters_is_fully_filled() -> None:
