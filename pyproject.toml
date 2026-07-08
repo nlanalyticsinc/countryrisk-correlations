@@ -9,6 +9,7 @@ description = "Correlation checks for reproduced NLA country-risk scores against
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    # The date parser uses pd.to_datetime(..., format="ISO8601"), which requires pandas 2.x.
     "pandas>=2",
 ]
 
@@ -49,7 +50,7 @@ extend-exclude = ["correlation_tables.ipynb"]
 select = ["B", "E", "F", "I", "UP"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.10"
 files = ["src", "tests"]
 check_untyped_defs = true
 disallow_untyped_defs = true

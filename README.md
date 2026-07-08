@@ -12,6 +12,8 @@ Bottom line: for the 20 reproduced countries currently available, reproduced ris
 
 These correlations were generated from NLA files in `data/reproduced_v1.0/` against `data/original/FirmCountryQuarter_withexposure.dta`. The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
 
+The headline table is rendered from `data/correlations/*.csv`; rerun `countryrisk-correlate` and then `correlation_tables.ipynb` to refresh it after changing inputs.
+
 | Country | Firm-quarter Pearson | Quarter Pearson | Matched firm-quarters | Quarters |
 |---|---:|---:|---:|---:|
 | `AR` | 0.97 | 0.99 | 315,211 | 72 |
@@ -123,8 +125,6 @@ The legacy script path remains available as a thin wrapper:
 python3 scripts/correlate_original_reproduced.py
 ```
 
-The latest local validation run against 20 v1.0 countries completed in 78.9 seconds on the current local machine.
-
 ## Tests
 
 The test suite uses synthetic data only, including a tiny generated Stata file and reproduced CSV fixture. It does not require the paper DTA or purchased NLA files.
@@ -133,6 +133,8 @@ The test suite uses synthetic data only, including a tiny generated Stata file a
 python3 -m pip install -e ".[test]"
 pytest
 ```
+
+Continuous integration runs linting, type checks, and tests on Python 3.12, plus the tests on Python 3.10 with pandas 2.0 to cover the declared interpreter and pandas floors.
 
 ## Outputs
 
