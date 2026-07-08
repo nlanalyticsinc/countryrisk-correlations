@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from countryrisk_replication.correlation import country_code_from_reproduced_file
+from countryrisk_replication.discovery import country_code_from_reproduced_file
 
 
 def test_country_code_from_reproduced_file_parses_known_slug() -> None:

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from countryrisk_replication.correlation import stata_internal_carry_forward
+from countryrisk_replication.panel import stata_internal_carry_forward
 
 
 def panel(rows: list[tuple[int, int, float]]) -> pd.DataFrame:

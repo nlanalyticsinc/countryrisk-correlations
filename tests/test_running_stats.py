@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from countryrisk_replication.correlation import RunningStats
+from countryrisk_replication.stats import RunningStats
 
 
 def test_running_stats_matches_numpy_corrcoef() -> None:

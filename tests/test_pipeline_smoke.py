@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from countryrisk_replication.correlation import RunConfig, run
+from countryrisk_replication.pipeline import RunConfig, run
 
 
 def write_synthetic_inputs(tmp_path: Path) -> tuple[Path, Path]:

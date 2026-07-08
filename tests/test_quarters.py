@@ -1,6 +1,6 @@
 import pandas as pd
 
-from countryrisk_replication.correlation import quarter_code_from_date_like, quarter_label
+from countryrisk_replication.panel import quarter_code_from_date_like, quarter_label
 
 
 def test_quarter_code_from_date_like_labels_realistic_timestamps() -> None:
