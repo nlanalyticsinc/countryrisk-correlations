@@ -22,15 +22,16 @@ def write_synthetic_inputs(tmp_path: Path) -> tuple[Path, Path]:
 
     pd.DataFrame(
         {
-            "gvkey": [1, 1, 2, 2],
+            "gvkey": [1, 1, 2, 2, 1],
             "start_time": [
                 "2020-01-20 13:30:00.000000000Z",
                 "2020-04-20 13:30:00.000000000Z",
                 "2020-01-20 13:30:00.000000000Z",
                 "2020-04-20 13:30:00.000000000Z",
+                "not-a-date",
             ],
-            "risk": [0.1, 0.2, 0.3, 0.5],
-            "nr_of_words": [1000, 1000, 1000, 1000],
+            "risk": [0.1, 0.2, 0.3, 0.5, 0.9],
+            "nr_of_words": [1000, 1000, 1000, 1000, 1000],
         }
     ).to_csv(
         reproduced_dir / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv",
@@ -43,6 +44,7 @@ def write_synthetic_inputs(tmp_path: Path) -> tuple[Path, Path]:
 def test_synthetic_pipeline_smoke_run(tmp_path: Path) -> None:
     dta_file, reproduced_dir = write_synthetic_inputs(tmp_path)
     out_dir = tmp_path / "correlations"
+    logs: list[str] = []
 
     result = run(
         RunConfig(
@@ -53,7 +55,7 @@ def test_synthetic_pipeline_smoke_run(tmp_path: Path) -> None:
             csv_chunk_size=2,
             dta_chunk_size=2,
         ),
-        logger=None,
+        logger=logs.append,
     )
 
     assert result.countries == ("AR",)
@@ -73,3 +75,4 @@ def test_synthetic_pipeline_smoke_run(tmp_path: Path) -> None:
     assert gvkey_rows["pearson"].tolist() == pytest.approx([1.0, 1.0])
     assert quarter_rows["pearson"].tolist() == pytest.approx([1.0, 1.0])
     assert manifest["role"].tolist() == ["paper_dta", "reproduced_csv"]
+    assert any("1 bad start_time values" in line for line in logs)

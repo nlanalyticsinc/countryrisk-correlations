@@ -278,17 +278,8 @@ def normalize_gvkey_series(series: pd.Series) -> pd.Series:
     return values.astype("Int64")
 
 
-def quarter_code_from_string(series: pd.Series) -> pd.Series:
-    text = series.astype("string")
-    year = pd.to_numeric(text.str.slice(0, 4), errors="coerce")
-    month = pd.to_numeric(text.str.slice(5, 7), errors="coerce")
-    quarter = ((month - 1) // 3) + 1
-    quarter = quarter.where(month.between(1, 12))
-    return (year * 4 + quarter).astype("Int64")
-
-
-def quarter_code_from_datetime(series: pd.Series) -> pd.Series:
-    dates = pd.to_datetime(series, errors="coerce")
+def quarter_code_from_date_like(series: pd.Series) -> pd.Series:
+    dates = pd.to_datetime(series, errors="coerce", utc=True, format="ISO8601")
     quarter = ((dates.dt.month - 1) // 3) + 1
     return (dates.dt.year * 4 + quarter).astype("Int64")
 
@@ -367,7 +358,7 @@ def dta_quarter_range(dta_file: Path, country_ids: dict[str, int], chunk_size: i
         chunk = chunk[code.isin(valid_countries)]
         if chunk.empty:
             continue
-        quarters = quarter_code_from_datetime(chunk["dateQ"]).dropna()
+        quarters = quarter_code_from_date_like(chunk["dateQ"]).dropna()
         if quarters.empty:
             continue
         current_min = int(quarters.min())
@@ -445,6 +436,7 @@ def build_reproduced_panel(
         start = perf_counter()
         country_parts: list[pd.DataFrame] = []
         rows_read = 0
+        start_time_parse_failures = 0
 
         for chunk in pd.read_csv(
             path,
@@ -453,7 +445,8 @@ def build_reproduced_panel(
         ):
             rows_read += len(chunk)
             gvkey = normalize_gvkey_series(chunk["gvkey"])
-            quarter = quarter_code_from_string(chunk["start_time"])
+            quarter = quarter_code_from_date_like(chunk["start_time"])
+            start_time_parse_failures += int((chunk["start_time"].notna() & quarter.isna()).sum())
             numeric = chunk[["risk", "nr_of_words"]].apply(pd.to_numeric, errors="coerce")
             words = numeric["nr_of_words"]
             valid = gvkey.notna() & quarter.notna() & words.notna() & words.gt(0) & numeric["risk"].notna()
@@ -473,7 +466,10 @@ def build_reproduced_panel(
 
         if not country_parts:
             if logger is not None:
-                logger(f"[rep {index}/{len(files)}] {code}: no usable rows ({elapsed(start)})")
+                logger(
+                    f"[rep {index}/{len(files)}] {code}: no usable rows, "
+                    f"{start_time_parse_failures:,} bad start_time values ({elapsed(start)})"
+                )
             continue
 
         events = pd.concat(country_parts, ignore_index=True)
@@ -507,11 +503,14 @@ def build_reproduced_panel(
             how="inner",
         )
         added = len(country_filled) - len(overlapping)
+        parse_note = (
+            f", {start_time_parse_failures:,} bad start_time values" if start_time_parse_failures else ""
+        )
         if logger is not None:
             logger(
                 f"[rep {index}/{len(files)}] {code}: {rows_read:,} rows, "
                 f"{len(country_observed):,} observed gvkey-quarters, "
-                f"{len(country_filled):,} filled gvkey-quarters, {added:,} added "
+                f"{len(country_filled):,} filled gvkey-quarters, {added:,} added{parse_note} "
                 f"({elapsed(start)})"
             )
 
@@ -585,7 +584,7 @@ def scan_dta(
             continue
         chunk["country_id"] = code.loc[chunk.index].map(country_ids).astype("Int64")
         chunk["gvkey_num"] = normalize_gvkey_series(chunk["gvkey"])
-        chunk["quarter_code"] = quarter_code_from_datetime(chunk["dateQ"])
+        chunk["quarter_code"] = quarter_code_from_date_like(chunk["dateQ"])
         chunk["dta_risk"] = pd.to_numeric(chunk["CountryRisk"], errors="coerce")
         chunk = chunk[["country_id", "gvkey_num", "quarter_code", "dta_risk"]].dropna()
         if chunk.empty:
