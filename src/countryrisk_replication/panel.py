@@ -38,9 +38,24 @@ def normalize_gvkey_series(series: pd.Series) -> pd.Series:
 
 
 def quarter_code_from_date_like(series: pd.Series) -> pd.Series:
-    dates = pd.to_datetime(series, errors="coerce", utc=True, format="ISO8601")
-    quarter = ((dates.dt.month - 1) // 3) + 1
-    return (dates.dt.year * 4 + quarter).astype("Int64")
+    if pd.api.types.is_datetime64_any_dtype(series):
+        quarter = ((series.dt.month - 1) // 3) + 1
+        return (series.dt.year * 4 + quarter).astype("Int64")
+
+    values = series.astype("string").str.strip()
+    parts = values.str.extract(
+        r"^(?:(?P<year_sep>\d{4,})[-/](?P<month_sep>\d{1,2})(?:[-/]\d{1,2})?|"
+        r"(?P<year_compact>\d{4})(?P<month_compact>\d{2})(?:\d{2})?)(?:[ T].*)?$"
+    )
+    year = pd.to_numeric(parts["year_sep"].fillna(parts["year_compact"]), errors="coerce")
+    month = pd.to_numeric(parts["month_sep"].fillna(parts["month_compact"]), errors="coerce")
+    valid = year.notna() & month.between(1, 12)
+
+    quarter = ((month[valid].astype("int64") - 1) // 3) + 1
+    code = year[valid].astype("int64") * 4 + quarter
+    result = pd.Series(pd.NA, index=series.index, dtype="Int64")
+    result.loc[valid] = code
+    return result
 
 
 def quarter_label(code: int) -> str:
