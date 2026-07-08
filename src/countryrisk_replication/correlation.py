@@ -160,11 +160,18 @@ class ReproducedPanelResult:
 
 
 @dataclass(frozen=True)
-class ScanDtaResult:
-    stats: dict[tuple[int, str], RunningStats]
-    quarter_acc: dict[tuple[int, int, str], list[float]]
+class DtaPanelResult:
+    panel: pd.DataFrame
     rows_by_country: dict[int, int]
     total_rows: int
+    quarter_start: int
+    quarter_end: int
+
+
+@dataclass(frozen=True)
+class CorrelationResult:
+    stats: dict[tuple[int, str], RunningStats]
+    quarter_acc: dict[tuple[int, int, str], list[float]]
 
 
 @dataclass(frozen=True)
@@ -343,31 +350,74 @@ def discover_reproduced_files(
     return selected
 
 
-def dta_quarter_range(dta_file: Path, country_ids: dict[str, int], chunk_size: int) -> tuple[int, int]:
+def load_dta_panel(
+    dta_file: Path,
+    country_ids: dict[str, int],
+    chunk_size: int,
+    logger: ProgressLogger | None = default_logger,
+) -> DtaPanelResult:
+    parts: list[pd.DataFrame] = []
+    rows_by_country: dict[int, int] = defaultdict(int)
     min_quarter: int | None = None
     max_quarter: int | None = None
     valid_countries = set(country_ids)
-    for chunk in pd.read_stata(
-        dta_file,
-        columns=["country_iso2", "dateQ"],
-        convert_categoricals=False,
-        preserve_dtypes=True,
-        chunksize=chunk_size,
+    rows_read = 0
+    rows_kept = 0
+    start = perf_counter()
+
+    for chunk_index, chunk in enumerate(
+        pd.read_stata(
+            dta_file,
+            columns=["gvkey", "country_iso2", "dateQ", "CountryRisk"],
+            convert_categoricals=False,
+            preserve_dtypes=True,
+            chunksize=chunk_size,
+        ),
+        start=1,
     ):
+        rows_read += len(chunk)
         code = chunk["country_iso2"].astype("string").str.upper()
-        chunk = chunk[code.isin(valid_countries)]
+        chunk = chunk[code.isin(valid_countries)].copy()
         if chunk.empty:
             continue
-        quarters = quarter_code_from_date_like(chunk["dateQ"]).dropna()
-        if quarters.empty:
+        chunk["country_id"] = code.loc[chunk.index].map(country_ids).astype("Int64")
+        chunk["gvkey_num"] = normalize_gvkey_series(chunk["gvkey"])
+        chunk["quarter_code"] = quarter_code_from_date_like(chunk["dateQ"])
+        chunk["dta_risk"] = pd.to_numeric(chunk["CountryRisk"], errors="coerce")
+        chunk = chunk[["country_id", "gvkey_num", "quarter_code", "dta_risk"]].dropna()
+        if chunk.empty:
             continue
+        chunk["country_id"] = chunk["country_id"].astype("int16")
+        chunk["gvkey_num"] = chunk["gvkey_num"].astype("int64")
+        chunk["quarter_code"] = chunk["quarter_code"].astype("int16")
+        chunk["dta_risk"] = chunk["dta_risk"].astype("float64")
+
+        rows_kept += len(chunk)
+        for country_id, count in chunk["country_id"].value_counts().items():
+            rows_by_country[int(country_id)] += int(count)
+
+        quarters = chunk["quarter_code"]
         current_min = int(quarters.min())
         current_max = int(quarters.max())
         min_quarter = current_min if min_quarter is None else min(min_quarter, current_min)
         max_quarter = current_max if max_quarter is None else max(max_quarter, current_max)
+        parts.append(chunk)
+
+        if logger is not None and chunk_index % 10 == 0:
+            logger(f"[dta] chunks={chunk_index}, read={rows_read:,}, kept={rows_kept:,} ({elapsed(start)})")
+
     if min_quarter is None or max_quarter is None:
         raise RuntimeError("Could not determine the DTA quarter range.")
-    return min_quarter, max_quarter
+    panel = pd.concat(parts, ignore_index=True)
+    if logger is not None:
+        logger(f"[dta] read={rows_read:,}, kept={rows_kept:,} ({elapsed(start)})")
+    return DtaPanelResult(
+        panel=panel,
+        rows_by_country=rows_by_country,
+        total_rows=rows_read,
+        quarter_start=min_quarter,
+        quarter_end=max_quarter,
+    )
 
 
 def stata_internal_carry_forward(
@@ -552,50 +602,19 @@ def add_quarter_stats(
         bucket[2] += count
 
 
-def scan_dta(
-    dta_file: Path,
+def correlate_panels(
+    dta_panel: pd.DataFrame,
     reproduced_panel: pd.DataFrame,
-    country_ids: dict[str, int],
     chunk_size: int,
     logger: ProgressLogger | None = default_logger,
-) -> ScanDtaResult:
+) -> CorrelationResult:
     stats: dict[tuple[int, str], RunningStats] = defaultdict(RunningStats)
     quarter_acc: dict[tuple[int, int, str], list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
-    dta_rows_by_country: dict[int, int] = defaultdict(int)
-    valid_countries = set(country_ids)
-    rows_read = 0
     matched_rows = 0
     start = perf_counter()
 
-    for chunk_index, chunk in enumerate(
-        pd.read_stata(
-            dta_file,
-            columns=["gvkey", "country_iso2", "dateQ", "CountryRisk"],
-            convert_categoricals=False,
-            preserve_dtypes=True,
-            chunksize=chunk_size,
-        ),
-        start=1,
-    ):
-        rows_read += len(chunk)
-        code = chunk["country_iso2"].astype("string").str.upper()
-        chunk = chunk[code.isin(valid_countries)].copy()
-        if chunk.empty:
-            continue
-        chunk["country_id"] = code.loc[chunk.index].map(country_ids).astype("Int64")
-        chunk["gvkey_num"] = normalize_gvkey_series(chunk["gvkey"])
-        chunk["quarter_code"] = quarter_code_from_date_like(chunk["dateQ"])
-        chunk["dta_risk"] = pd.to_numeric(chunk["CountryRisk"], errors="coerce")
-        chunk = chunk[["country_id", "gvkey_num", "quarter_code", "dta_risk"]].dropna()
-        if chunk.empty:
-            continue
-
-        chunk["country_id"] = chunk["country_id"].astype("int16")
-        chunk["gvkey_num"] = chunk["gvkey_num"].astype("int64")
-        chunk["quarter_code"] = chunk["quarter_code"].astype("int16")
-        for country_id, count in chunk["country_id"].value_counts().items():
-            dta_rows_by_country[int(country_id)] += int(count)
-
+    for chunk_index, offset in enumerate(range(0, len(dta_panel), chunk_size), start=1):
+        chunk = dta_panel.iloc[offset : offset + chunk_size]
         merged = chunk.join(
             reproduced_panel,
             on=["country_id", "gvkey_num", "quarter_code"],
@@ -618,16 +637,15 @@ def scan_dta(
 
         if logger is not None and chunk_index % 10 == 0:
             logger(
-                f"[dta] chunks={chunk_index}, read={rows_read:,}, joined={matched_rows:,} ({elapsed(start)})",
+                f"[join] chunks={chunk_index}, processed={min(offset + chunk_size, len(dta_panel)):,}, "
+                f"joined={matched_rows:,} ({elapsed(start)})",
             )
 
     if logger is not None:
-        logger(f"[dta] read={rows_read:,}, joined={matched_rows:,} ({elapsed(start)})")
-    return ScanDtaResult(
+        logger(f"[join] processed={len(dta_panel):,}, joined={matched_rows:,} ({elapsed(start)})")
+    return CorrelationResult(
         stats=stats,
         quarter_acc=quarter_acc,
-        rows_by_country=dta_rows_by_country,
-        total_rows=rows_read,
     )
 
 
@@ -752,32 +770,36 @@ def run(config: RunConfig, logger: ProgressLogger | None = default_logger) -> Ru
     if logger is not None:
         logger(f"Countries: {', '.join(sorted(files))}")
 
-    q_start, q_end = dta_quarter_range(config.dta_file, country_ids, config.dta_chunk_size)
+    dta = load_dta_panel(
+        config.dta_file,
+        country_ids,
+        config.dta_chunk_size,
+        logger=logger,
+    )
     if logger is not None:
-        logger(f"DTA quarter range: {quarter_label(q_start)}-{quarter_label(q_end)}")
+        logger(f"DTA quarter range: {quarter_label(dta.quarter_start)}-{quarter_label(dta.quarter_end)}")
 
     reproduced = build_reproduced_panel(
         files,
         country_ids,
         config.csv_chunk_size,
-        q_start,
-        q_end,
+        dta.quarter_start,
+        dta.quarter_end,
         logger=logger,
     )
     if logger is not None:
         logger(f"Reproduced panel rows, union observed/filled: {len(reproduced.panel):,}")
 
-    scanned = scan_dta(
-        config.dta_file,
+    correlations = correlate_panels(
+        dta.panel,
         reproduced.panel,
-        country_ids,
         config.dta_chunk_size,
         logger=logger,
     )
     gvkey_rows, quarter_rows = build_output_rows(
-        scanned.stats,
-        scanned.quarter_acc,
-        scanned.rows_by_country,
+        correlations.stats,
+        correlations.quarter_acc,
+        dta.rows_by_country,
         reproduced.observed_counts,
         reproduced.filled_counts,
         country_ids,
@@ -792,7 +814,7 @@ def run(config: RunConfig, logger: ProgressLogger | None = default_logger) -> Ru
     write_manifest(
         manifest_path,
         dta_file=config.dta_file,
-        dta_rows=scanned.total_rows,
+        dta_rows=dta.total_rows,
         reproduced_files=files,
         reproduced_row_counts=reproduced.row_counts,
         country_ids=country_ids,
