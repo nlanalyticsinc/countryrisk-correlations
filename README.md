@@ -60,6 +60,12 @@ data/
 
 Each reproduced NLA CSV must contain `gvkey`, `start_time`, `risk`, and `nr_of_words`. The version tag in the filename is used only to discover country files; the script treats every matching CSV in the reproduced directory as part of the validation set.
 
+## Paper Code Provenance
+
+The public replication package for Hassan et al. (2023) is archived on Zenodo at <https://doi.org/10.5281/zenodo.7783429>. That package does not include the raw score-import script, but it documents the downstream paper build: `data/make.py` treats `raw/refinitiv/scores.dta` as the prepared score input, `data/code/stata/country_quarter.do` and `data/code/stata/firm_country.do` build the paper's analysis panels from it, and `data/code/stata/firmrisk_import.do` uses the same short-gap backfill pattern mirrored here for the reproduced series.
+
+This repository therefore uses the paper-distributed `FirmCountryQuarter_withexposure.dta` as the benchmark panel. It does not attempt to rebuild the paper data from licensed raw transcript inputs.
+
 ## What Is Compared
 
 The DTA side is:

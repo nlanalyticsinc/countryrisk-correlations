@@ -427,7 +427,12 @@ def stata_internal_carry_forward(
     quarter_start: int,
     quarter_end: int,
 ) -> pd.DataFrame:
-    """Mirror scores_import.do:158-189 short-gap carry-forward semantics."""
+    """Mirror the paper code's short-gap carry-forward semantics.
+
+    The same backfill pattern appears in the public Zenodo replication package
+    at countryrisk-main/data/code/stata/firmrisk_import.do
+    (https://doi.org/10.5281/zenodo.7783429).
+    """
     output_columns = ["country_id", "gvkey_num", "quarter_code", "rep_filled_risk"]
     if panel.empty:
         return pd.DataFrame(columns=output_columns)
