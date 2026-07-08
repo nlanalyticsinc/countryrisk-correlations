@@ -96,19 +96,25 @@ python3 -m pip install -e .
 ```
 
 ```sh
-python3 scripts/correlate_original_reproduced.py
+countryrisk-correlate
 ```
 
-The script defaults to `data/reproduced_v1.0/`. To use a different reproduced directory:
+The command defaults to `data/reproduced_v1.0/`. To use a different reproduced directory:
 
 ```sh
-python3 scripts/correlate_original_reproduced.py --reproduced-dir data/reproduced_v2.2
+countryrisk-correlate --reproduced-dir data/reproduced_v2.2
 ```
 
 For a quick country subset:
 
 ```sh
-python3 scripts/correlate_original_reproduced.py --countries AR,GB,CA
+countryrisk-correlate --countries AR,GB,CA
+```
+
+The legacy script path remains available as a thin wrapper:
+
+```sh
+python3 scripts/correlate_original_reproduced.py
 ```
 
 The latest local validation run against 20 v1.0 countries completed in 78.9 seconds on the current local machine.
@@ -136,7 +142,7 @@ The manifest records the DTA and reproduced CSV filenames, file sizes, row count
 
 ## Notebook
 
-`correlation_tables.ipynb` is a thin wrapper around the same script. Use it if you want to rerun the correlations and inspect the output tables interactively.
+`correlation_tables.ipynb` calls the same package API. Use it if you want to rerun the correlations and inspect the output tables interactively.
 
 The notebook dependencies are optional:
 

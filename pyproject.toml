@@ -12,6 +12,9 @@ dependencies = [
     "pandas>=2",
 ]
 
+[project.scripts]
+countryrisk-correlate = "countryrisk_replication.correlation:main"
+
 [project.optional-dependencies]
 notebook = [
     "ipykernel>=6",
