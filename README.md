@@ -6,7 +6,7 @@ The validation compares the DTA's firm-country-quarter `CountryRisk` series with
 
 Only `risk` is compared. Exposure is intentionally not included.
 
-Bottom line: for the 20 reproduced countries currently available, reproduced risk correlates with the paper DTA at 0.90-0.97 across firm-quarters, averaging 0.95. Quarter-level correlations average 0.99.
+Bottom line: for the 45 reproduced countries currently available, reproduced risk correlates with the paper DTA at 0.747-0.974 across firm-quarters, averaging 0.933. Quarter-level correlations range from 0.864 to 0.996, averaging 0.981.
 
 ## Headline Results
 
@@ -16,31 +16,58 @@ The headline table is rendered from `data/correlations/*.csv`; rerun `countryris
 
 | Country | Firm-quarter Pearson | Quarter Pearson | Matched firm-quarters | Quarters |
 |---|---:|---:|---:|---:|
-| `AR` | 0.97 | 0.99 | 315,211 | 72 |
-| `AU` | 0.94 | 0.99 | 315,211 | 72 |
-| `BE` | 0.95 | 0.99 | 315,211 | 72 |
-| `BR` | 0.95 | 0.99 | 315,211 | 72 |
-| `CA` | 0.90 | 0.97 | 315,211 | 72 |
-| `CL` | 0.93 | 0.99 | 315,211 | 72 |
-| `CN` | 0.92 | 0.99 | 315,211 | 72 |
-| `CO` | 0.93 | 0.99 | 315,211 | 72 |
-| `CZ` | 0.95 | 0.99 | 315,211 | 72 |
-| `DE` | 0.95 | 0.99 | 315,211 | 72 |
-| `EG` | 0.96 | 0.99 | 315,211 | 72 |
-| `FR` | 0.95 | 0.99 | 315,211 | 72 |
-| `GB` | 0.94 | 0.99 | 315,211 | 72 |
-| `GR` | 0.97 | 1.00 | 315,211 | 72 |
-| `HK` | 0.96 | 0.99 | 315,211 | 72 |
-| `HU` | 0.97 | 0.99 | 315,211 | 72 |
-| `ID` | 0.94 | 0.99 | 315,211 | 72 |
-| `IE` | 0.94 | 0.99 | 315,211 | 72 |
-| `IN` | 0.93 | 0.98 | 315,211 | 72 |
-| `IR` | 0.96 | 0.99 | 315,211 | 72 |
-| Average | 0.95 | 0.99 | - | - |
+| `AR` | 0.973 | 0.994 | 315,211 | 72 |
+| `AU` | 0.944 | 0.990 | 315,211 | 72 |
+| `BE` | 0.946 | 0.990 | 315,211 | 72 |
+| `BR` | 0.953 | 0.993 | 315,211 | 72 |
+| `CA` | 0.898 | 0.974 | 315,211 | 72 |
+| `CH` | 0.917 | 0.982 | 315,211 | 72 |
+| `CL` | 0.929 | 0.985 | 315,211 | 72 |
+| `CN` | 0.917 | 0.989 | 315,211 | 72 |
+| `CO` | 0.933 | 0.989 | 315,211 | 72 |
+| `CZ` | 0.948 | 0.986 | 315,211 | 72 |
+| `DE` | 0.948 | 0.989 | 315,211 | 72 |
+| `EG` | 0.955 | 0.991 | 315,211 | 72 |
+| `ES` | 0.955 | 0.987 | 315,211 | 72 |
+| `FR` | 0.951 | 0.988 | 315,211 | 72 |
+| `GB` | 0.944 | 0.993 | 315,211 | 72 |
+| `GR` | 0.969 | 0.996 | 315,211 | 72 |
+| `HK` | 0.965 | 0.994 | 315,211 | 72 |
+| `HU` | 0.974 | 0.986 | 315,211 | 72 |
+| `ID` | 0.943 | 0.988 | 315,211 | 72 |
+| `IE` | 0.940 | 0.988 | 315,211 | 72 |
+| `IL` | 0.747 | 0.925 | 315,211 | 72 |
+| `IN` | 0.934 | 0.982 | 315,211 | 72 |
+| `IR` | 0.957 | 0.985 | 315,211 | 72 |
+| `IT` | 0.966 | 0.989 | 315,211 | 72 |
+| `JP` | 0.924 | 0.991 | 315,211 | 72 |
+| `KR` | 0.917 | 0.987 | 315,211 | 72 |
+| `MX` | 0.866 | 0.927 | 315,211 | 72 |
+| `MY` | 0.971 | 0.991 | 315,211 | 72 |
+| `NG` | 0.933 | 0.981 | 315,211 | 72 |
+| `NL` | 0.929 | 0.989 | 315,211 | 72 |
+| `NO` | 0.967 | 0.864 | 315,211 | 72 |
+| `NZ` | 0.942 | 0.985 | 315,211 | 72 |
+| `PH` | 0.931 | 0.965 | 315,211 | 72 |
+| `PK` | 0.967 | 0.982 | 315,211 | 72 |
+| `PL` | 0.943 | 0.985 | 315,211 | 72 |
+| `RU` | 0.952 | 0.995 | 315,211 | 72 |
+| `SA` | 0.939 | 0.990 | 315,211 | 72 |
+| `SE` | 0.963 | 0.985 | 315,211 | 72 |
+| `SG` | 0.964 | 0.988 | 315,211 | 72 |
+| `TH` | 0.908 | 0.988 | 315,211 | 72 |
+| `TR` | 0.963 | 0.990 | 315,211 | 72 |
+| `TW` | 0.783 | 0.967 | 315,211 | 72 |
+| `US` | 0.856 | 0.970 | 315,211 | 72 |
+| `VE` | 0.968 | 0.989 | 315,211 | 72 |
+| `ZA` | 0.882 | 0.974 | 315,211 | 72 |
+| Average | 0.933 | 0.981 | - | - |
 
 The matched firm-quarter count is the same for every country because each country CSV covers the same call universe. The country-specific score differs, but the available `gvkey`-quarter keys are common across country files.
 
 The `filled` variant is the headline because the benchmark DTA itself reflects the original Stata import/backfill convention. The `observed` variant is included in the output CSVs as a no-fill robustness check.
+
+The lowest filled correlations in this run are `IL` and `TW` at the firm-quarter level and `NO` at the quarter level. The CSV outputs contain full-precision values for all countries and both variants.
 
 ## Data
 
@@ -97,32 +124,33 @@ This is a validation against the paper-distributed DTA panel. It is not a byte-f
 
 ## Run
 
-Install the package dependencies, then run:
+Create a virtual environment, install the package dependencies, then run:
 
 ```sh
-python3 -m pip install -e .
+python3 -m venv venv
+venv/bin/python -m pip install -e .
 ```
 
 ```sh
-countryrisk-correlate
+venv/bin/countryrisk-correlate
 ```
 
 The command defaults to `data/reproduced_v1.0/`. To use a different reproduced directory:
 
 ```sh
-countryrisk-correlate --reproduced-dir data/reproduced_v2.2
+venv/bin/countryrisk-correlate --reproduced-dir data/reproduced_v2.2
 ```
 
 For a quick country subset:
 
 ```sh
-countryrisk-correlate --countries AR,GB,CA
+venv/bin/countryrisk-correlate --countries AR,GB,CA
 ```
 
 The legacy script path remains available as a thin wrapper:
 
 ```sh
-python3 scripts/correlate_original_reproduced.py
+venv/bin/python scripts/correlate_original_reproduced.py
 ```
 
 ## Tests
@@ -130,8 +158,9 @@ python3 scripts/correlate_original_reproduced.py
 The test suite uses synthetic data only, including a tiny generated Stata file and reproduced CSV fixture. It does not require the paper DTA or purchased NLA files.
 
 ```sh
-python3 -m pip install -e ".[test]"
-pytest
+python3 -m venv venv
+venv/bin/python -m pip install -e ".[test]"
+venv/bin/pytest
 ```
 
 Continuous integration runs linting, type checks, and tests on Python 3.12, plus the tests on Python 3.10 with pandas 2.0 to cover the declared interpreter and pandas floors.
