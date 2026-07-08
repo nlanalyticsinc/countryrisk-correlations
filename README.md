@@ -113,6 +113,15 @@ python3 scripts/correlate_original_reproduced.py --countries AR,GB,CA
 
 The latest local validation run against 20 v1.0 countries completed in 78.9 seconds on the current local machine.
 
+## Tests
+
+The test suite uses synthetic data only, including a tiny generated Stata file and reproduced CSV fixture. It does not require the paper DTA or purchased NLA files.
+
+```sh
+python3 -m pip install -e ".[test]"
+pytest
+```
+
 ## Outputs
 
 The script writes outputs to `data/correlations/`:
