@@ -427,6 +427,7 @@ def stata_internal_carry_forward(
     quarter_start: int,
     quarter_end: int,
 ) -> pd.DataFrame:
+    """Mirror scores_import.do:158-189 short-gap carry-forward semantics."""
     output_columns = ["country_id", "gvkey_num", "quarter_code", "rep_filled_risk"]
     if panel.empty:
         return pd.DataFrame(columns=output_columns)
@@ -449,11 +450,13 @@ def stata_internal_carry_forward(
 
     anchor_observed = balanced["rep_observed_risk"].notna()
     has_prior_observed = anchor_observed.groupby(balanced["gvkey_num"]).cummax()
+    # Reverse cummax marks rows with a future observed anchor, excluding trailing gaps.
     has_future_observed = (
         anchor_observed.iloc[::-1].groupby(balanced["gvkey_num"].iloc[::-1]).cummax().iloc[::-1]
     )
     internal_gap = balanced["rep_observed_risk"].isna() & has_prior_observed & has_future_observed
 
+    # Use original observed anchors so gaps longer than four quarters are truncated, not chained.
     prior_within_limit = pd.Series(False, index=balanced.index)
     grouped_anchor = balanced.groupby("gvkey_num")["rep_observed_risk"]
     for lag in range(1, 5):
