@@ -1,0 +1,14 @@
+venv/
+*/__pycache__/
+.DS_Store
+scratch/
+scripts/download_reproduced_outputs.sh
+
+# Downloaded input data are not tracked. Small generated public outputs under
+# data/correlations/ are intentionally allowed.
+data/*
+!data/correlations/
+data/correlations/*
+!data/correlations/gvkey_quarter_correlations.csv
+!data/correlations/quarter_correlations.csv
+!data/correlations/data_manifest.csv

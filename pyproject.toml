@@ -1,0 +1,16 @@
+[project]
+name = "countryrisk-replication"
+version = "0.1.0"
+description = "Correlation checks for reproduced NLA country-risk scores against original paper-based country-risk measures."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2",
+]
+
+[project.optional-dependencies]
+notebook = [
+    "ipykernel>=6",
+    "jupyterlab>=4",
+    "nbconvert>=7",
+]
