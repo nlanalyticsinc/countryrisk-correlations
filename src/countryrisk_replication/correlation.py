@@ -83,15 +83,22 @@ CODE_TO_COUNTRY_SLUG = {
     code: slug for slug, code in COUNTRY_SLUG_TO_CODE.items() if slug != "united-states-of-america"
 }
 
+
+@dataclass(frozen=True, slots=True)
+class VariantConfig:
+    column: str
+    description: str
+
+
 VARIANTS = {
-    "observed": {
-        "column": "rep_observed_risk",
-        "description": "mean(100000 * risk / nr_of_words)",
-    },
-    "filled": {
-        "column": "rep_filled_risk",
-        "description": "Stata-style carry-forward of mean(100000 * risk / nr_of_words)",
-    },
+    "observed": VariantConfig(
+        column="rep_observed_risk",
+        description="mean(100000 * risk / nr_of_words)",
+    ),
+    "filled": VariantConfig(
+        column="rep_filled_risk",
+        description="Stata-style carry-forward of mean(100000 * risk / nr_of_words)",
+    ),
 }
 
 GVKEY_QUARTER_FIELDS = [
@@ -169,10 +176,17 @@ class DtaPanelResult:
     quarter_end: int
 
 
+@dataclass(slots=True)
+class QuarterSums:
+    dta_sum: float = 0.0
+    reproduced_sum: float = 0.0
+    n: int = 0
+
+
 @dataclass(frozen=True)
 class CorrelationResult:
     stats: dict[tuple[int, str], RunningStats]
-    quarter_acc: dict[tuple[int, int, str], list[float]]
+    quarter_acc: dict[tuple[int, int, str], QuarterSums]
 
 
 @dataclass(frozen=True)
@@ -589,7 +603,7 @@ def build_reproduced_panel(
 
 
 def add_quarter_stats(
-    quarter_acc: dict[tuple[int, int, str], list[float]],
+    quarter_acc: dict[tuple[int, int, str], QuarterSums],
     merged: pd.DataFrame,
     *,
     variant: str,
@@ -606,9 +620,9 @@ def add_quarter_stats(
         if count <= 0:
             continue
         bucket = quarter_acc[(int(country_id), int(quarter_code), variant)]
-        bucket[0] += float(row[("dta_risk", "sum")])
-        bucket[1] += float(row[(rep_col, "sum")])
-        bucket[2] += count
+        bucket.dta_sum += float(row[("dta_risk", "sum")])
+        bucket.reproduced_sum += float(row[(rep_col, "sum")])
+        bucket.n += count
 
 
 def correlate_panels(
@@ -618,7 +632,7 @@ def correlate_panels(
     logger: ProgressLogger | None = default_logger,
 ) -> CorrelationResult:
     stats: dict[tuple[int, str], RunningStats] = defaultdict(RunningStats)
-    quarter_acc: dict[tuple[int, int, str], list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0])
+    quarter_acc: dict[tuple[int, int, str], QuarterSums] = defaultdict(QuarterSums)
     matched_rows = 0
     start = perf_counter()
 
@@ -638,11 +652,11 @@ def correlate_panels(
             for variant, config in VARIANTS.items():
                 stats[(cid, variant)].add_arrays(
                     country_frame["dta_risk"],
-                    country_frame[config["column"]],
+                    country_frame[config.column],
                 )
 
         for variant, config in VARIANTS.items():
-            add_quarter_stats(quarter_acc, merged, variant=variant, rep_col=config["column"])
+            add_quarter_stats(quarter_acc, merged, variant=variant, rep_col=config.column)
 
         if logger is not None and chunk_index % 10 == 0:
             logger(
@@ -660,7 +674,7 @@ def correlate_panels(
 
 def build_output_rows(
     stats: dict[tuple[int, str], RunningStats],
-    quarter_acc: dict[tuple[int, int, str], list[float]],
+    quarter_acc: dict[tuple[int, int, str], QuarterSums],
     dta_rows_by_country: dict[int, int],
     observed_counts: dict[int, int],
     filled_counts: dict[int, int],
@@ -682,7 +696,7 @@ def build_output_rows(
                 "variant": variant,
                 "level": "gvkey-quarter",
                 "dta_value": "CountryRisk",
-                "reproduced_value": VARIANTS[variant]["description"],
+                "reproduced_value": VARIANTS[variant].description,
                 "n_pairs": running.n,
                 "n_dta_country_rows": dta_rows_by_country.get(country_id, 0),
                 "n_reproduced_observed_gvkey_quarters": observed_counts.get(country_id, 0),
@@ -695,11 +709,11 @@ def build_output_rows(
     quarter_stats: dict[tuple[int, str], RunningStats] = defaultdict(RunningStats)
     quarter_counts: dict[tuple[int, str], list[int]] = defaultdict(list)
     for (country_id, quarter, variant), bucket in quarter_acc.items():
-        count = int(bucket[2])
+        count = bucket.n
         if count <= 0:
             continue
-        dta_mean = bucket[0] / count
-        reproduced_mean = bucket[1] / count
+        dta_mean = bucket.dta_sum / count
+        reproduced_mean = bucket.reproduced_sum / count
         quarter_stats[(country_id, variant)].add_arrays(
             pd.Series([dta_mean], dtype="float64"),
             pd.Series([reproduced_mean], dtype="float64"),
@@ -718,7 +732,7 @@ def build_output_rows(
                 "variant": variant,
                 "level": "quarter",
                 "dta_value": "mean CountryRisk across matched gvkey-quarters",
-                "reproduced_value": f"quarter mean of {VARIANTS[variant]['description']}",
+                "reproduced_value": f"quarter mean of {VARIANTS[variant].description}",
                 "n_pairs": running.n,
                 "matched_gvkey_quarters": stats[(country_id, variant)].n,
                 "first_quarter": quarter_label(quarters[0]) if quarters else "",
