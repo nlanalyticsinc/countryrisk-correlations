@@ -28,6 +28,13 @@ def test_quarter_code_from_date_like_handles_datetimes() -> None:
     assert labels == ["2003Q1", "2003Q2", "2020Q4"]
 
 
+def test_quarter_code_from_date_like_does_not_wrap_large_years() -> None:
+    code = int(quarter_code_from_date_like(pd.Series(["9000-01-01"])).iloc[0])
+
+    assert code == 36001
+    assert quarter_label(code) == "9000Q1"
+
+
 def test_quarter_code_from_date_like_coerces_bad_and_ambiguous_values() -> None:
     codes = quarter_code_from_date_like(pd.Series(["bad", None, "2020-13-01", "01/15/2020"]))
 

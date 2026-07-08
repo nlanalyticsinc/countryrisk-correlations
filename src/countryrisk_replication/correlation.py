@@ -28,6 +28,7 @@ DTA_FILE = Path("data/original/FirmCountryQuarter_withexposure.dta")
 REPRODUCED_DIR = Path("data/reproduced_v1.0")
 OUT_DIR = Path("data/correlations")
 SCORE_SCALE = 100000.0
+QUARTER_DTYPE = "int32"
 
 COUNTRY_SLUG_TO_CODE = {
     "argentina": "ar",
@@ -389,7 +390,7 @@ def load_dta_panel(
             continue
         chunk["country_id"] = chunk["country_id"].astype("int16")
         chunk["gvkey_num"] = chunk["gvkey_num"].astype("int64")
-        chunk["quarter_code"] = chunk["quarter_code"].astype("int16")
+        chunk["quarter_code"] = chunk["quarter_code"].astype(QUARTER_DTYPE)
         chunk["dta_risk"] = chunk["dta_risk"].astype("float64")
 
         rows_kept += len(chunk)
@@ -508,7 +509,7 @@ def build_reproduced_panel(
                     {
                         "country_id": country_ids[code],
                         "gvkey_num": gvkey[valid].astype("int64"),
-                        "quarter_code": quarter[valid].astype("int16"),
+                        "quarter_code": quarter[valid].astype(QUARTER_DTYPE),
                         "rep_observed_risk": SCORE_SCALE * numeric.loc[valid, "risk"] / words.loc[valid],
                     }
                 )
@@ -569,7 +570,7 @@ def build_reproduced_panel(
     panel = pd.concat(panels, ignore_index=True)
     panel["country_id"] = panel["country_id"].astype("int16")
     panel["gvkey_num"] = panel["gvkey_num"].astype("int64")
-    panel["quarter_code"] = panel["quarter_code"].astype("int16")
+    panel["quarter_code"] = panel["quarter_code"].astype(QUARTER_DTYPE)
     panel = panel.set_index(["country_id", "gvkey_num", "quarter_code"]).sort_index()
     return ReproducedPanelResult(
         panel=panel,
