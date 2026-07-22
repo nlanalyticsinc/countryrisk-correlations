@@ -6,68 +6,68 @@ The validation compares the DTA's firm-country-quarter `CountryRisk` series with
 
 Only `risk` is compared. Exposure is intentionally not included.
 
-Bottom line: for the 45 reproduced countries currently available, reproduced risk correlates with the paper DTA at 0.747-0.974 across firm-quarters, averaging 0.933. Quarter-level correlations range from 0.864 to 0.996, averaging 0.981.
+Bottom line: for the 45 reproduced countries currently available, reproduced risk correlates with the paper DTA at 0.748-0.974 across firm-quarters, averaging 0.933. Quarter-level correlations range from 0.932 to 0.995, averaging 0.983.
 
 ## Headline Results
 
-These correlations were generated from NLA files in `data/reproduced_v1.0/` against `data/original/FirmCountryQuarter_withexposure.dta`. The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
+These correlations were generated from the NLA package in `data/nla_country-risk_dataset_2026-06-30/` against `data/original/FirmCountryQuarter_withexposure.dta`. The matched period is 2002Q1-2020Q4. The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
 
 The headline table is rendered from `data/correlations/*.csv`; execute `correlation_tables.ipynb` to rerun the pipeline and refresh the rendered table after changing inputs.
 
 | Country | Firm-quarter Pearson | Quarter Pearson | Matched firm-quarters | Quarters |
 |---|---:|---:|---:|---:|
-| `AR` | 0.973 | 0.994 | 315,211 | 72 |
-| `AU` | 0.944 | 0.990 | 315,211 | 72 |
-| `BE` | 0.946 | 0.990 | 315,211 | 72 |
-| `BR` | 0.953 | 0.993 | 315,211 | 72 |
-| `CA` | 0.898 | 0.974 | 315,211 | 72 |
-| `CH` | 0.917 | 0.982 | 315,211 | 72 |
-| `CL` | 0.929 | 0.985 | 315,211 | 72 |
-| `CN` | 0.917 | 0.989 | 315,211 | 72 |
-| `CO` | 0.933 | 0.989 | 315,211 | 72 |
-| `CZ` | 0.948 | 0.986 | 315,211 | 72 |
-| `DE` | 0.948 | 0.989 | 315,211 | 72 |
-| `EG` | 0.955 | 0.991 | 315,211 | 72 |
-| `ES` | 0.955 | 0.987 | 315,211 | 72 |
-| `FR` | 0.951 | 0.988 | 315,211 | 72 |
-| `GB` | 0.944 | 0.993 | 315,211 | 72 |
-| `GR` | 0.969 | 0.996 | 315,211 | 72 |
-| `HK` | 0.965 | 0.994 | 315,211 | 72 |
-| `HU` | 0.974 | 0.986 | 315,211 | 72 |
-| `ID` | 0.943 | 0.988 | 315,211 | 72 |
-| `IE` | 0.940 | 0.988 | 315,211 | 72 |
-| `IL` | 0.747 | 0.925 | 315,211 | 72 |
-| `IN` | 0.934 | 0.982 | 315,211 | 72 |
-| `IR` | 0.957 | 0.985 | 315,211 | 72 |
-| `IT` | 0.966 | 0.989 | 315,211 | 72 |
-| `JP` | 0.924 | 0.991 | 315,211 | 72 |
-| `KR` | 0.917 | 0.987 | 315,211 | 72 |
-| `MX` | 0.866 | 0.927 | 315,211 | 72 |
-| `MY` | 0.971 | 0.991 | 315,211 | 72 |
-| `NG` | 0.933 | 0.981 | 315,211 | 72 |
-| `NL` | 0.929 | 0.989 | 315,211 | 72 |
-| `NO` | 0.967 | 0.864 | 315,211 | 72 |
-| `NZ` | 0.942 | 0.985 | 315,211 | 72 |
-| `PH` | 0.931 | 0.965 | 315,211 | 72 |
-| `PK` | 0.967 | 0.982 | 315,211 | 72 |
-| `PL` | 0.943 | 0.985 | 315,211 | 72 |
-| `RU` | 0.952 | 0.995 | 315,211 | 72 |
-| `SA` | 0.939 | 0.990 | 315,211 | 72 |
-| `SE` | 0.963 | 0.985 | 315,211 | 72 |
-| `SG` | 0.964 | 0.988 | 315,211 | 72 |
-| `TH` | 0.908 | 0.988 | 315,211 | 72 |
-| `TR` | 0.963 | 0.990 | 315,211 | 72 |
-| `TW` | 0.783 | 0.967 | 315,211 | 72 |
-| `US` | 0.856 | 0.970 | 315,211 | 72 |
-| `VE` | 0.968 | 0.989 | 315,211 | 72 |
-| `ZA` | 0.882 | 0.974 | 315,211 | 72 |
-| Average | 0.933 | 0.981 | - | - |
+| `AR` | 0.972 | 0.992 | 321,048 | 76 |
+| `AU` | 0.944 | 0.986 | 321,048 | 76 |
+| `BE` | 0.946 | 0.989 | 321,048 | 76 |
+| `BR` | 0.954 | 0.993 | 321,048 | 76 |
+| `CA` | 0.898 | 0.967 | 321,048 | 76 |
+| `CH` | 0.917 | 0.981 | 321,048 | 76 |
+| `CL` | 0.929 | 0.984 | 321,048 | 76 |
+| `CN` | 0.917 | 0.990 | 321,048 | 76 |
+| `CO` | 0.933 | 0.989 | 321,048 | 76 |
+| `CZ` | 0.948 | 0.984 | 321,048 | 76 |
+| `DE` | 0.948 | 0.991 | 321,048 | 76 |
+| `EG` | 0.955 | 0.992 | 321,048 | 76 |
+| `ES` | 0.955 | 0.988 | 321,048 | 76 |
+| `FR` | 0.951 | 0.988 | 321,048 | 76 |
+| `GB` | 0.944 | 0.993 | 321,048 | 76 |
+| `GR` | 0.968 | 0.995 | 321,048 | 76 |
+| `HK` | 0.965 | 0.995 | 321,048 | 76 |
+| `HU` | 0.974 | 0.987 | 321,048 | 76 |
+| `ID` | 0.943 | 0.987 | 321,048 | 76 |
+| `IE` | 0.940 | 0.989 | 321,048 | 76 |
+| `IL` | 0.748 | 0.932 | 321,048 | 76 |
+| `IN` | 0.934 | 0.979 | 321,048 | 76 |
+| `IR` | 0.957 | 0.986 | 321,048 | 76 |
+| `IT` | 0.966 | 0.990 | 321,048 | 76 |
+| `JP` | 0.924 | 0.991 | 321,048 | 76 |
+| `KR` | 0.917 | 0.984 | 321,048 | 76 |
+| `MX` | 0.867 | 0.936 | 321,048 | 76 |
+| `MY` | 0.971 | 0.988 | 321,048 | 76 |
+| `NG` | 0.933 | 0.982 | 321,048 | 76 |
+| `NL` | 0.929 | 0.989 | 321,048 | 76 |
+| `NO` | 0.967 | 0.960 | 321,048 | 76 |
+| `NZ` | 0.941 | 0.982 | 321,048 | 76 |
+| `PH` | 0.931 | 0.966 | 321,048 | 76 |
+| `PK` | 0.967 | 0.983 | 321,048 | 76 |
+| `PL` | 0.943 | 0.987 | 321,048 | 76 |
+| `RU` | 0.952 | 0.995 | 321,048 | 76 |
+| `SA` | 0.938 | 0.989 | 321,048 | 76 |
+| `SE` | 0.963 | 0.986 | 321,048 | 76 |
+| `SG` | 0.963 | 0.987 | 321,048 | 76 |
+| `TH` | 0.908 | 0.987 | 321,048 | 76 |
+| `TR` | 0.963 | 0.991 | 321,048 | 76 |
+| `TW` | 0.786 | 0.965 | 321,048 | 76 |
+| `US` | 0.857 | 0.973 | 321,048 | 76 |
+| `VE` | 0.968 | 0.988 | 321,048 | 76 |
+| `ZA` | 0.883 | 0.973 | 321,048 | 76 |
+| Average | 0.933 | 0.983 | - | - |
 
 The matched firm-quarter count is the same for every country because each country CSV covers the same call universe. The country-specific score differs, but the available `gvkey`-quarter keys are common across country files.
 
 The `filled` variant is the headline because the benchmark DTA itself reflects the original Stata import/backfill convention. The `observed` variant is included in the output CSVs as a no-fill robustness check.
 
-The lowest filled correlations in this run are `IL` and `TW` at the firm-quarter level and `NO` at the quarter level. The CSV outputs contain full-precision values for all countries and both variants.
+The lowest filled correlations in this run are `IL` and `TW` at the firm-quarter level and `IL` at the quarter level. The CSV outputs contain full-precision values for all countries and both variants.
 
 ## Data
 
