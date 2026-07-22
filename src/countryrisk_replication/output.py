@@ -8,7 +8,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from countryrisk_replication.discovery import CODE_TO_COUNTRY_SLUG
+from countryrisk_replication.discovery import (
+    CODE_TO_COUNTRY_SLUG,
+    reproduced_file_label,
+    reproduced_file_metadata,
+)
 from countryrisk_replication.panel import quarter_label
 from countryrisk_replication.stats import VARIANTS, QuarterSums, RunningStats
 
@@ -48,6 +52,11 @@ MANIFEST_FIELDS = [
     "role",
     "country_code",
     "path",
+    "source_layout",
+    "dataset_date",
+    "series_version",
+    "series_id",
+    "compression",
     "bytes",
     "rows",
     "sha256",
@@ -91,7 +100,7 @@ def build_output_rows(
                 "n_dta_country_rows": dta_rows_by_country.get(country_id, 0),
                 "n_reproduced_observed_gvkey_quarters": observed_counts.get(country_id, 0),
                 "n_reproduced_filled_gvkey_quarters": filled_counts.get(country_id, 0),
-                "reproduced_file": files[code].name,
+                "reproduced_file": reproduced_file_label(files[code]),
                 "pearson": running.pearson(),
             }
         )
@@ -127,7 +136,7 @@ def build_output_rows(
                 "matched_gvkey_quarters": stats[(country_id, variant)].n,
                 "first_quarter": quarter_label(quarters[0]) if quarters else "",
                 "last_quarter": quarter_label(quarters[-1]) if quarters else "",
-                "reproduced_file": files[code].name,
+                "reproduced_file": reproduced_file_label(files[code]),
                 "pearson": running.pearson(),
             }
         )
@@ -155,6 +164,11 @@ def write_manifest(
             "role": "paper_dta",
             "country_code": "",
             "path": str(dta_file),
+            "source_layout": "stata",
+            "dataset_date": "",
+            "series_version": "",
+            "series_id": "",
+            "compression": "none",
             "bytes": dta_file.stat().st_size,
             "rows": dta_rows,
             "sha256": file_sha256(dta_file),
@@ -162,11 +176,19 @@ def write_manifest(
     ]
     for code, reproduced_file in sorted(reproduced_files.items()):
         country_id = country_ids[code]
+        metadata = reproduced_file_metadata(reproduced_file)
+        if metadata is None:
+            raise ValueError(f"Could not determine reproduced-file metadata for {reproduced_file}")
         rows.append(
             {
                 "role": "reproduced_csv",
                 "country_code": code,
                 "path": str(reproduced_file),
+                "source_layout": metadata.source_layout,
+                "dataset_date": metadata.dataset_date,
+                "series_version": metadata.series_version,
+                "series_id": metadata.series_id,
+                "compression": metadata.compression,
                 "bytes": reproduced_file.stat().st_size,
                 "rows": reproduced_row_counts.get(country_id, ""),
                 "sha256": file_sha256(reproduced_file),

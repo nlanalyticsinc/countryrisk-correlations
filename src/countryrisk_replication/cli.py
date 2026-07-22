@@ -23,7 +23,10 @@ def parse_args() -> argparse.Namespace:
         "--reproduced-dir",
         type=Path,
         default=REPRODUCED_DIR,
-        help=f"Directory containing NLA country-risk *_firmlevel.csv files. Defaults to {REPRODUCED_DIR}.",
+        help=(
+            "NLA country-risk dataset root, series directory, or legacy flat export directory. "
+            f"Defaults to {REPRODUCED_DIR}."
+        ),
     )
     parser.add_argument(
         "--out-dir",

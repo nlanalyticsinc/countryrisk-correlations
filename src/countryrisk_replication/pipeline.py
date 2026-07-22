@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from time import perf_counter
 
@@ -20,9 +21,34 @@ from countryrisk_replication.panel import build_reproduced_panel, load_dta_panel
 from countryrisk_replication.stats import correlate_panels
 from countryrisk_replication.utils import ProgressLogger, default_logger, elapsed
 
-DTA_FILE = Path("data/original/FirmCountryQuarter_withexposure.dta")
-REPRODUCED_DIR = Path("data/reproduced_v1.0")
+DATA_DIR = Path("data")
+DTA_FILE = DATA_DIR / "original/FirmCountryQuarter_withexposure.dta"
+LEGACY_REPRODUCED_DIR = DATA_DIR / "reproduced_v1.0"
 OUT_DIR = Path("data/correlations")
+
+
+def latest_nla_dataset_dir(data_dir: Path = DATA_DIR) -> Path | None:
+    candidates: list[tuple[date, Path]] = []
+    prefix = "nla_country-risk_dataset_"
+    for path in data_dir.glob(f"{prefix}*"):
+        if not path.is_dir():
+            continue
+        date_text = path.name.removeprefix(prefix)
+        try:
+            dataset_date = date.fromisoformat(date_text)
+        except ValueError:
+            continue
+        if dataset_date.isoformat() != date_text:
+            continue
+        candidates.append((dataset_date, path))
+    return max(candidates)[1] if candidates else None
+
+
+def default_reproduced_dir(data_dir: Path = DATA_DIR) -> Path:
+    return latest_nla_dataset_dir(data_dir) or data_dir / LEGACY_REPRODUCED_DIR.name
+
+
+REPRODUCED_DIR = default_reproduced_dir()
 
 
 @dataclass(frozen=True)

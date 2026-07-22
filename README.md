@@ -12,7 +12,7 @@ Bottom line: for the 45 reproduced countries currently available, reproduced ris
 
 These correlations were generated from NLA files in `data/reproduced_v1.0/` against `data/original/FirmCountryQuarter_withexposure.dta`. The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
 
-The headline table is rendered from `data/correlations/*.csv`; rerun `countryrisk-correlate` and then `correlation_tables.ipynb` to refresh it after changing inputs.
+The headline table is rendered from `data/correlations/*.csv`; execute `correlation_tables.ipynb` to rerun the pipeline and refresh the rendered table after changing inputs.
 
 | Country | Firm-quarter Pearson | Quarter Pearson | Matched firm-quarters | Quarters |
 |---|---:|---:|---:|---:|
@@ -75,19 +75,30 @@ Data files are downloaded separately and are not tracked in git.
 
 Obtain the paper-based DTA from the Country Risk project download page: <https://www.country-risk.net/download>. Use the "Firm-country-quarter level" Stata file and place it at `data/original/FirmCountryQuarter_withexposure.dta`.
 
-Obtain the reproduced NLA country-risk series from the NL Analytics curated-measures page: <https://apps.nlanalytics.tech/curated-measures/country-risk>. Place the purchased firm-level CSV files under `data/reproduced_v1.0/`, or pass their directory with `--reproduced-dir`.
+Obtain the reproduced NLA country-risk series from the NL Analytics curated-measures page: <https://apps.nlanalytics.tech/curated-measures/country-risk>. By default, the pipeline selects the most recent directory matching `data/nla_country-risk_dataset_YYYY-MM-DD/`. If no packaged dataset exists, it falls back to `data/reproduced_v1.0/`. The legacy flat-file export also remains explicitly selectable through `--reproduced-dir`.
 
-Expected local layout:
+Supported local layouts:
 
 ```text
 data/
   original/
     FirmCountryQuarter_withexposure.dta
+  nla_country-risk_dataset_2026-06-30/
+    README.txt
+    series/
+      01-countryrisk-argentina-v11-70ca2a2b/
+        firmlevel.csv.gz
+        timeseries.csv.gz
+
+# Legacy flat export
+data/
   reproduced_v1.0/
     NLA_*_countryrisk-*-v10_*_firmlevel.csv
 ```
 
-Each reproduced NLA CSV must contain `gvkey`, `start_time`, `risk`, and `nr_of_words`. The version tag in the filename is used only to discover country files; the script treats every matching CSV in the reproduced directory as part of the validation set.
+The package root, its `series/` directory, or an individual series directory can be passed to `--reproduced-dir`. Gzip files are read directly and do not need to be unpacked. Only `firmlevel.csv.gz` is used; the aggregate `timeseries.csv.gz` lacks the `gvkey` observations required for the firm-quarter comparison.
+
+Each reproduced NLA firm-level CSV must contain `gvkey`, `start_time`, `risk`, and `nr_of_words`. The version tag and series identifier are recorded as provenance but do not select different scoring logic. Discovery fails rather than mixing two files for the same country.
 
 ## Paper Code Provenance
 
@@ -135,10 +146,16 @@ venv/bin/python -m pip install -e .
 venv/bin/countryrisk-correlate
 ```
 
-The command defaults to `data/reproduced_v1.0/`. To use a different reproduced directory:
+The command defaults to the packaged dataset with the most recent valid `YYYY-MM-DD` suffix. To use the legacy flat-file layout explicitly:
 
 ```sh
-venv/bin/countryrisk-correlate --reproduced-dir data/reproduced_v2.2
+venv/bin/countryrisk-correlate --reproduced-dir data/reproduced_v1.0
+```
+
+To use another packaged dataset, pass its package root without decompressing it:
+
+```sh
+venv/bin/countryrisk-correlate --reproduced-dir data/nla_country-risk_dataset_YYYY-MM-DD
 ```
 
 For a quick country subset:
@@ -175,17 +192,23 @@ The script writes outputs to `data/correlations/`:
 
 Use the `pearson` column as the validation statistic. Values close to 1, together with large matched sample sizes, indicate that the NLA series closely tracks the paper-based DTA measure.
 
-The manifest records the DTA and reproduced CSV filenames, file sizes, row counts, and SHA-256 hashes used in the run.
+The manifest records the DTA and reproduced CSV paths, source layouts, dataset dates, series versions and identifiers, compression, file sizes, row counts, and SHA-256 hashes used in the run.
 
 ## Notebook
 
-`correlation_tables.ipynb` calls the same package API. Use it if you want to rerun the correlations and inspect the output tables interactively.
+`correlation_tables.ipynb` calls the same package API, writes the correlation CSVs, and renders the headline table. Use it to rerun the correlations and inspect the output tables interactively.
 
 The notebook dependencies are optional:
 
 ```sh
 python3 -m venv venv
 venv/bin/python -m pip install -e ".[notebook]"
+```
+
+Execute the notebook in place to generate the CSV outputs and refresh its rendered tables:
+
+```sh
+venv/bin/jupyter nbconvert --to notebook --execute --inplace correlation_tables.ipynb
 ```
 
 ## Limitations

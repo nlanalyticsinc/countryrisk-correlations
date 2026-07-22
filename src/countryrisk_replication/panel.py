@@ -221,7 +221,14 @@ def build_reproduced_panel(
             start_time_parse_failures += int((chunk["start_time"].notna() & quarter.isna()).sum())
             numeric = chunk[["risk", "nr_of_words"]].apply(pd.to_numeric, errors="coerce")
             words = numeric["nr_of_words"]
-            valid = gvkey.notna() & quarter.notna() & words.notna() & words.gt(0) & numeric["risk"].notna()
+            valid = (
+                gvkey.notna()
+                & quarter.notna()
+                & quarter.between(quarter_start, quarter_end)
+                & words.notna()
+                & words.gt(0)
+                & numeric["risk"].notna()
+            )
             if not valid.any():
                 continue
 
