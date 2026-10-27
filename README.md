@@ -10,7 +10,7 @@ Bottom line: for the 45 reproduced countries currently available, reproduced ris
 
 ## Headline Results
 
-These correlations were generated from the NLA package in `data/nla_country-risk_dataset_2026-06-30/` against `data/original/FirmCountryQuarter_withexposure.dta`. The matched period is 2002Q1-2020Q4. The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
+These correlations were generated from the NLA package in `data/nla_country-risk_dataset_2026-06-30/` against `data/original/FirmCountryQuarter_withexposure.dta`. The matched period is 2002Q1-2020Q4. That package predates the October 2026 refresh, and its firm-level files still carried a `gvkey` column. The table has not been rerun on files downloaded since then, which take GVKEY from the crosswalk described under [Data](#data). The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
 
 The headline table is rendered from `data/correlations/*.csv`; execute `correlation_tables.ipynb` to rerun the pipeline and refresh the rendered table after changing inputs.
 
@@ -75,7 +75,7 @@ Data files are downloaded separately and are not tracked in git.
 
 Obtain the paper-based DTA from the Country Risk project download page: <https://www.country-risk.net/download>. Use the "Firm-country-quarter level" Stata file and place it at `data/original/FirmCountryQuarter_withexposure.dta`.
 
-Obtain the reproduced NLA country-risk series from the NL Analytics curated-measures page: <https://apps.nlanalytics.tech/curated-measures/country-risk>. By default, the pipeline selects the most recent directory matching `data/nla_country-risk_dataset_YYYY-MM-DD/`. If no packaged dataset exists, it falls back to `data/reproduced_v1.0/`. The legacy flat-file export also remains explicitly selectable through `--reproduced-dir`.
+Obtain the reproduced NLA country-risk series from the NL Analytics curated-measures page: <https://apps.nlanalytics.tech/curated-measures/country-risk>. Its "Download dataset (ZIP)" button downloads `nla_country-risk_dataset_YYYY-MM-DD.zip`. Unzip it into `data/nla_country-risk_dataset_YYYY-MM-DD/`. By default, the pipeline selects the most recent directory matching that name. If no packaged dataset exists, it falls back to `data/reproduced_v1.0/`. The legacy flat-file export also remains explicitly selectable through `--reproduced-dir`.
 
 Supported local layouts:
 
@@ -83,22 +83,35 @@ Supported local layouts:
 data/
   original/
     FirmCountryQuarter_withexposure.dta
-  nla_country-risk_dataset_2026-06-30/
+  nla_country-risk_dataset_YYYY-MM-DD/
     README.txt
+    gvkeys.csv.gz
     series/
       01-countryrisk-argentina-v11-70ca2a2b/
         firmlevel.csv.gz
         timeseries.csv.gz
 
-# Legacy flat export
+# Legacy flat export: files from each series page
 data/
   reproduced_v1.0/
     NLA_*_countryrisk-*-v10_*_firmlevel.csv
+    NLA_*_gvkeys.csv
 ```
 
-The package root, its `series/` directory, or an individual series directory can be passed to `--reproduced-dir`. Gzip files are read directly and do not need to be unpacked. Only `firmlevel.csv.gz` is used; the aggregate `timeseries.csv.gz` lacks the `gvkey` observations required for the firm-quarter comparison.
+The package root, its `series/` directory, or an individual series directory can be passed to `--reproduced-dir`. Only the firm-level files and the GVKEY crosswalk are used; the aggregate `timeseries.csv.gz` has no firm-level observations.
 
-Each reproduced NLA firm-level CSV must contain `gvkey`, `start_time`, `risk`, and `nr_of_words`. The version tag and series identifier are recorded as provenance but do not select different scoring logic. Discovery fails rather than mixing two files for the same country.
+Gzip files are read directly and do not need to be unpacked. The pipeline detects gzip from a file's first bytes, not its name: a file downloaded from a series page can hold gzip bytes under a plain `.csv` name.
+
+### GVKEY crosswalk
+
+Firm-level files downloaded since the October 2026 refresh have no `gvkey` column. GVKEY ships in the measure's crosswalk, `gvkeys.csv`, with the columns `earningscallID`, `gvkey_compustat`, `sic_compustat`, and `sic_compustat_description`. Every series of the measure shares the same crosswalk:
+
+- A ZIP packaged since 22 October 2026 includes it once, as `gvkeys.csv.gz` at its root, next to `series/`. The ZIP's `README.txt` gives the packaging date. An older ZIP has no crosswalk; if its firm-level files lack `gvkey`, take the crosswalk from a series page.
+- On a series page it is the "Crosswalk to GVKey (includes SIC)" download, saved as `NLA_*_gvkeys.csv`. Download it from one series page and put it next to the firm-level files.
+
+For a firm-level file without `gvkey`, the pipeline joins `gvkey_compustat` on `earningscallID`. Calls without a GVKEY in the crosswalk drop out, as calls with a blank `gvkey` always have; the log reports how many. Files that carry `gvkey`, such as the June 2026 package behind the table above, are read as before and ignore the crosswalk. To use a crosswalk stored elsewhere, pass `--gvkeys-file`.
+
+Each reproduced NLA firm-level CSV must contain `start_time`, `risk`, `nr_of_words`, and either `gvkey` or `earningscallID`. The version tag and series identifier are recorded as provenance but do not select different scoring logic. Discovery fails rather than mixing two files for the same country.
 
 ## Paper Code Provenance
 
@@ -158,6 +171,12 @@ To use another packaged dataset, pass its package root without decompressing it:
 venv/bin/countryrisk-correlate --reproduced-dir data/nla_country-risk_dataset_YYYY-MM-DD
 ```
 
+To use a GVKEY crosswalk that is not next to the firm-level files:
+
+```sh
+venv/bin/countryrisk-correlate --gvkeys-file path/to/gvkeys.csv.gz
+```
+
 For a quick country subset:
 
 ```sh
@@ -192,7 +211,7 @@ The script writes outputs to `data/correlations/`:
 
 Use the `pearson` column as the validation statistic. Values close to 1, together with large matched sample sizes, indicate that the NLA series closely tracks the paper-based DTA measure.
 
-The manifest records the DTA and reproduced CSV paths, source layouts, dataset dates, series versions and identifiers, compression, file sizes, row counts, and SHA-256 hashes used in the run.
+The manifest records the DTA and reproduced CSV paths, source layouts, dataset dates, series versions and identifiers, compression, file sizes, row counts, and SHA-256 hashes used in the run. When a crosswalk supplies GVKEY, it is listed too, with the role `gvkey_crosswalk`.
 
 ## Notebook
 

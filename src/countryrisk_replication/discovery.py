@@ -6,9 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import pandas as pd
-
-from countryrisk_replication.utils import ProgressLogger, default_logger
+from countryrisk_replication.utils import ProgressLogger, csv_columns, default_logger
 
 COUNTRY_SLUG_TO_CODE = {
     "argentina": "ar",
@@ -63,7 +61,14 @@ CODE_TO_COUNTRY_SLUG = {
     code: slug for slug, code in COUNTRY_SLUG_TO_CODE.items() if slug != "united-states-of-america"
 }
 
-REQUIRED_FIRMLEVEL_COLUMNS = {"gvkey", "start_time", "risk", "nr_of_words"}
+REQUIRED_FIRMLEVEL_COLUMNS = {"start_time", "risk", "nr_of_words"}
+# Firm-level files carry gvkey, or earningscallID for the join to the measure's
+# gvkeys.csv crosswalk (gvkey_compustat).
+GVKEY_COLUMN = "gvkey"
+CALL_ID_COLUMN = "earningscallID"
+# The dataset ZIP holds one gvkeys.csv(.gz) at its root, next to series/;
+# a series page offers the same crosswalk as NLA_*_gvkeys.csv.
+GVKEY_CROSSWALK_PATTERNS = ("gvkeys.csv", "gvkeys.csv.gz", "*_gvkeys.csv", "*_gvkeys.csv.gz")
 LEGACY_FILE_PATTERN = re.compile(
     r"_countryrisk-(?P<slug>.+?)-v(?P<version>[^_]+)_"
     r"(?P<series_id>[^_]+)_firmlevel\.csv(?:\.gz)?$"
@@ -80,10 +85,9 @@ class ReproducedFileMetadata:
     series_version: str
     series_id: str
     dataset_date: str
-    compression: str
 
 
-def _dataset_date(path: Path) -> str:
+def dataset_date(path: Path) -> str:
     for directory in path.parents:
         match = DATASET_DIRECTORY_PATTERN.fullmatch(directory.name)
         if match:
@@ -115,8 +119,7 @@ def reproduced_file_metadata(path: Path) -> ReproducedFileMetadata | None:
         source_layout=source_layout,
         series_version=match.group("version"),
         series_id=match.group("series_id"),
-        dataset_date=_dataset_date(path),
-        compression="gzip" if path.suffix == ".gz" else "none",
+        dataset_date=dataset_date(path),
     )
 
 
@@ -164,8 +167,10 @@ def discover_reproduced_files(
         if countries is not None and code not in countries:
             continue
 
-        header = set(pd.read_csv(path, nrows=0).columns)
+        header = csv_columns(path)
         missing = REQUIRED_FIRMLEVEL_COLUMNS.difference(header)
+        if GVKEY_COLUMN not in header and CALL_ID_COLUMN not in header:
+            missing.add(f"{GVKEY_COLUMN} or {CALL_ID_COLUMN}")
         if missing:
             raise ValueError(f"{path} is missing required columns: {', '.join(sorted(missing))}")
         if code in selected:
@@ -182,3 +187,30 @@ def discover_reproduced_files(
     if not selected:
         raise FileNotFoundError(f"No usable country-risk firmlevel CSVs found under {reproduced_dir}")
     return selected
+
+
+def discover_gvkey_crosswalk(reproduced_dir: Path) -> Path:
+    """Find the measure's GVKEY crosswalk in or above the reproduced directory."""
+    search_dirs = [reproduced_dir]
+    if reproduced_dir.name == "series":
+        search_dirs.append(reproduced_dir.parent)
+    elif reproduced_dir.parent.name == "series":
+        search_dirs.append(reproduced_dir.parent.parent)
+    candidates = sorted(
+        {
+            path
+            for directory in search_dirs
+            for pattern in GVKEY_CROSSWALK_PATTERNS
+            for path in directory.glob(pattern)
+        }
+    )
+    if not candidates:
+        raise FileNotFoundError(
+            f"No GVKEY crosswalk found for {reproduced_dir}. Firm-level files without a gvkey column need "
+            "the measure's gvkeys.csv: it is at the root of the dataset ZIP, and a series page offers it "
+            "as NLA_*_gvkeys.csv. Put it next to the firm-level files or pass --gvkeys-file."
+        )
+    if len(candidates) > 1:
+        names = ", ".join(str(path) for path in candidates)
+        raise ValueError(f"Multiple GVKEY crosswalks found: {names}. Keep one or pass --gvkeys-file.")
+    return candidates[0]

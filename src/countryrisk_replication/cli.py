@@ -35,6 +35,14 @@ def parse_args() -> argparse.Namespace:
         help=f"Directory for generated correlation CSVs. Defaults to {OUT_DIR}.",
     )
     parser.add_argument(
+        "--gvkeys-file",
+        type=Path,
+        help=(
+            "GVKEY crosswalk (gvkeys.csv) for firm-level files without a gvkey column. Defaults to the "
+            "gvkeys.csv(.gz) at the dataset root or the NLA_*_gvkeys.csv next to the firm-level files."
+        ),
+    )
+    parser.add_argument(
         "--countries",
         help="Optional comma-separated ISO2 country list, useful for a quick test.",
     )
@@ -59,5 +67,6 @@ def main() -> None:
         countries=parse_countries(args.countries),
         csv_chunk_size=args.csv_chunk_size,
         dta_chunk_size=args.dta_chunk_size,
+        gvkeys_file=args.gvkeys_file,
     )
     run(config)
