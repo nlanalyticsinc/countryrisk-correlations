@@ -12,17 +12,13 @@ def write_synthetic_inputs(tmp_path: Path, layout: str) -> tuple[Path, Path, str
     if layout == "legacy_flat":
         reproduced_dir = tmp_path / "reproduced"
         reproduced_file = (
-            reproduced_dir
-            / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv"
+            reproduced_dir / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv"
         )
         reproduced_label = reproduced_file.name
     elif layout == "dataset_bundle":
         reproduced_dir = tmp_path / "nla_country-risk_dataset_2026-06-30"
         reproduced_file = (
-            reproduced_dir
-            / "series"
-            / "01-countryrisk-argentina-v11-70ca2a2b"
-            / "firmlevel.csv.gz"
+            reproduced_dir / "series" / "01-countryrisk-argentina-v11-70ca2a2b" / "firmlevel.csv.gz"
         )
         reproduced_label = "01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz"
     else:
@@ -58,9 +54,7 @@ def write_synthetic_inputs(tmp_path: Path, layout: str) -> tuple[Path, Path, str
 
 @pytest.mark.parametrize("layout", ["legacy_flat", "dataset_bundle"])
 def test_synthetic_pipeline_smoke_run(tmp_path: Path, layout: str) -> None:
-    dta_file, reproduced_dir, reproduced_label, source_layout = write_synthetic_inputs(
-        tmp_path, layout
-    )
+    dta_file, reproduced_dir, reproduced_label, source_layout = write_synthetic_inputs(tmp_path, layout)
     out_dir = tmp_path / "correlations"
     logs: list[str] = []
 

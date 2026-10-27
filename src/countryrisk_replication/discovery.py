@@ -68,9 +68,7 @@ LEGACY_FILE_PATTERN = re.compile(
     r"_countryrisk-(?P<slug>.+?)-v(?P<version>[^_]+)_"
     r"(?P<series_id>[^_]+)_firmlevel\.csv(?:\.gz)?$"
 )
-BUNDLE_SERIES_PATTERN = re.compile(
-    r"^\d+-countryrisk-(?P<slug>.+)-v(?P<version>[^-]+)-(?P<series_id>[^-]+)$"
-)
+BUNDLE_SERIES_PATTERN = re.compile(r"^\d+-countryrisk-(?P<slug>.+)-v(?P<version>[^-]+)-(?P<series_id>[^-]+)$")
 DATASET_DIRECTORY_PATTERN = re.compile(r"^nla_country-risk_dataset_(?P<date>\d{4}-\d{2}-\d{2})$")
 
 

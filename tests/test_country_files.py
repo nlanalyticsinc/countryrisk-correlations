@@ -31,14 +31,11 @@ def test_country_code_from_reproduced_file_parses_known_slug() -> None:
 
 def test_country_code_from_packaged_file_parses_parent_series_directory() -> None:
     path = Path(
-        "nla_country-risk_dataset_2026-06-30/series/"
-        "01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz"
+        "nla_country-risk_dataset_2026-06-30/series/01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz"
     )
 
     assert country_code_from_reproduced_file(path) == "AR"
-    assert reproduced_file_label(path) == (
-        "01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz"
-    )
+    assert reproduced_file_label(path) == ("01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz")
     metadata = reproduced_file_metadata(path)
     assert metadata is not None
     assert metadata.source_layout == "dataset_bundle"
@@ -82,15 +79,8 @@ def test_discover_packaged_firmlevel_and_ignore_timeseries(tmp_path: Path, root_
 
 
 def test_discovery_rejects_duplicate_country_across_layouts(tmp_path: Path) -> None:
-    write_firmlevel(
-        tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv"
-    )
-    write_firmlevel(
-        tmp_path
-        / "series"
-        / "01-countryrisk-argentina-v11-70ca2a2b"
-        / "firmlevel.csv.gz"
-    )
+    write_firmlevel(tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv")
+    write_firmlevel(tmp_path / "series" / "01-countryrisk-argentina-v11-70ca2a2b" / "firmlevel.csv.gz")
 
     with pytest.raises(ValueError, match="Multiple reproduced firmlevel CSVs found for AR"):
         discover_reproduced_files(tmp_path, None, logger=None)
@@ -105,9 +95,7 @@ def test_discovery_rejects_missing_required_columns(tmp_path: Path) -> None:
 
 
 def test_discovery_reports_requested_countries_not_found(tmp_path: Path) -> None:
-    write_firmlevel(
-        tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv"
-    )
+    write_firmlevel(tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv")
 
     with pytest.raises(FileNotFoundError, match="No usable country-risk firmlevel CSV found for: CL"):
         discover_reproduced_files(tmp_path, {"AR", "CL"}, logger=None)
