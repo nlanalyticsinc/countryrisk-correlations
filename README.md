@@ -10,7 +10,9 @@ Bottom line: for the 45 reproduced countries currently available, reproduced ris
 
 ## Headline Results
 
-These correlations were generated from the NLA package in `data/nla_country-risk_dataset_2026-06-30/` against `data/original/FirmCountryQuarter_withexposure.dta`. The matched period is 2002Q1-2020Q4. That package predates the October 2026 refresh, and its firm-level files still carried a `gvkey` column. The table has not been rerun on files downloaded since then, which take GVKEY from the crosswalk described under [Data](#data). The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
+These correlations were generated from the NLA package in `data/nla_country-risk_dataset_2026-09-30/` (data through 30 September 2026, packaged 28 October 2026) against `data/original/FirmCountryQuarter_withexposure.dta`. Its firm-level files have no `gvkey` column, so GVKEY comes from the package's crosswalk, described under [Data](#data). The matched period is 2002Q1-2020Q4. The table reports the `filled` variant, which applies the same short-gap carry-forward convention used by the original Stata import pipeline. The CSV outputs also include an `observed` variant.
+
+The June 2026 package (data through 30 June 2026), whose firm-level files still carried `gvkey`, gives the same table to full precision. The October package adds calls only in 2026Q3, after the matched period, and its crosswalk assigns every matched call the GVKEY that the June files carried.
 
 The headline table is rendered from `data/correlations/*.csv`; execute `correlation_tables.ipynb` to rerun the pipeline and refresh the rendered table after changing inputs.
 
@@ -109,13 +111,13 @@ Firm-level files downloaded since the October 2026 refresh have no `gvkey` colum
 - A ZIP packaged since 22 October 2026 includes it once, as `gvkeys.csv.gz` at its root, next to `series/`. The ZIP's `README.txt` gives the packaging date. An older ZIP has no crosswalk; if its firm-level files lack `gvkey`, take the crosswalk from a series page.
 - On a series page it is the "Crosswalk to GVKey (includes SIC)" download, saved as `NLA_*_gvkeys.csv`. Download it from one series page and put it next to the firm-level files.
 
-For a firm-level file without `gvkey`, the pipeline joins `gvkey_compustat` on `earningscallID`. Calls without a GVKEY in the crosswalk drop out, as calls with a blank `gvkey` always have; the log reports how many. Files that carry `gvkey`, such as the June 2026 package behind the table above, are read as before and ignore the crosswalk. To use a crosswalk stored elsewhere, pass `--gvkeys-file`.
+For a firm-level file without `gvkey`, the pipeline joins `gvkey_compustat` on `earningscallID`. Calls without a GVKEY in the crosswalk drop out, as calls with a blank `gvkey` always have; the log reports how many. Files that carry `gvkey`, such as those in the June 2026 package, are read as before and ignore the crosswalk. To use a crosswalk stored elsewhere, pass `--gvkeys-file`.
 
 Call IDs are trimmed, and blank IDs are ignored. Crosswalk overlap is checked using call IDs, including calls whose GVKEY is missing; a file with nonblank call IDs that are all absent from the crosswalk fails. A country with no usable GVKEYs is skipped, allowing other countries to run.
 
 GVKEYs accept digits with an optional all-zero decimal part (`001004`, `1004`, `1004.0`), within the signed 64-bit range. Blank values and the case-insensitive markers `.`, `NA`, `N/A`, `NaN`, `NULL`, `None`, and `<NA>` mean missing. Malformed nonmissing GVKEYs fail with the source file and row number. These rules apply to the crosswalk and both original and reproduced inputs.
 
-Each reproduced NLA firm-level CSV must contain `start_time`, `risk`, `nr_of_words`, and either `gvkey` or `earningscallID`. The version tag and series identifier are recorded as provenance but do not select different scoring logic. Discovery fails rather than mixing two files for the same country.
+Each reproduced NLA firm-level CSV must contain `start_time`, `risk`, `nr_of_words`, and either `gvkey` or `earningscallID`. Rows with a blank or nonnumeric `risk` or `nr_of_words`, or a word count that is not positive, are skipped. The version tag and series identifier are recorded as provenance but do not select different scoring logic. Discovery fails rather than mixing two files for the same country.
 
 ## Paper Code Provenance
 
