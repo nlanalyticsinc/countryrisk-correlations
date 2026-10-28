@@ -62,3 +62,10 @@ def test_running_stats_returns_none_for_insufficient_or_constant_data() -> None:
 
     assert single.pearson() is None
     assert constant.pearson() is None
+
+
+def test_running_stats_excludes_nonfinite_pairs() -> None:
+    stats = RunningStats()
+    stats.add_arrays(pd.Series([1.0, 2.0, float("inf"), 4.0]), pd.Series([2.0, 4.0, 6.0, float("-inf")]))
+    assert stats.n == 2
+    assert stats.pearson() == pytest.approx(1.0)

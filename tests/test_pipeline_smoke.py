@@ -217,6 +217,8 @@ def test_blank_score_late_in_a_large_file_is_skipped(tmp_path: Path) -> None:
             "nr_of_words": "1000",
         }
     )
+    filler.loc[filler.index[-1], "earningscallID"] = "call-1"
+    filler.loc[filler.index[-1], "risk"] = "99"
     filler.loc[filler.index[-1], "nr_of_words"] = ""
     panel = pd.concat([calls, filler], ignore_index=True)
     panel.reindex(columns=DOWNLOAD_COLUMNS, fill_value="x").to_csv(path, index=False)
@@ -285,3 +287,14 @@ def test_gvkeys_file_overrides_discovery(tmp_path: Path) -> None:
     )
 
     assert result.gvkey_quarter_rows["n_pairs"].tolist() == [4, 4]
+
+
+@pytest.mark.parametrize("chunk_size", [2, 100])
+def test_duplicate_original_keys_are_rejected_across_chunks(tmp_path: Path, chunk_size: int) -> None:
+    dta, reproduced, _, _ = write_synthetic_inputs(tmp_path, "legacy_flat")
+    original = pd.read_stata(dta)
+    pd.concat([original, original.iloc[[0]]], ignore_index=True).to_stata(dta, write_index=False, version=118)
+    config = replace(synthetic_config(dta, reproduced, tmp_path / "out"), dta_chunk_size=chunk_size)
+    with pytest.raises(ValueError, match="duplicate original firm-country-quarter") as error:
+        run(config, logger=None)
+    assert str(dta) in str(error.value)

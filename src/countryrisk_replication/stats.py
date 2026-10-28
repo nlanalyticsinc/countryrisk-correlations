@@ -49,7 +49,7 @@ class RunningStats:
     def add_arrays(self, x: pd.Series, y: pd.Series) -> None:
         xv_all = pd.to_numeric(x, errors="coerce").to_numpy(dtype="float64", na_value=math.nan)
         yv_all = pd.to_numeric(y, errors="coerce").to_numpy(dtype="float64", na_value=math.nan)
-        valid = ~(pd.isna(xv_all) | pd.isna(yv_all))
+        valid = (abs(xv_all) < math.inf) & (abs(yv_all) < math.inf)
         if not valid.any():
             return
         xv = xv_all[valid]

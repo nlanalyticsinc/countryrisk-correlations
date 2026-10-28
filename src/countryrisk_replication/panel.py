@@ -195,6 +195,11 @@ def load_dta_panel(
     if min_quarter is None or max_quarter is None:
         raise RuntimeError("Could not determine the DTA quarter range.")
     panel = pd.concat(parts, ignore_index=True)
+    keys = ["country_id", "gvkey_num", "quarter_code"]
+    duplicates = panel.duplicated(keys, keep=False)
+    if duplicates.any():
+        examples = panel.loc[duplicates, keys].drop_duplicates().head(3).to_dict("records")
+        raise ValueError(f"{dta_file} contains duplicate original firm-country-quarter rows: {examples}")
     if logger is not None:
         logger(f"[dta] read={rows_read:,}, kept={rows_kept:,} ({elapsed(start)})")
     return DtaPanelResult(
@@ -286,6 +291,7 @@ def build_reproduced_panel(
         country_parts: list[pd.DataFrame] = []
         rows_read = 0
         start_time_parse_failures = 0
+        invalid_score_rows = 0
         has_gvkey = GVKEY_COLUMN in csv_columns(path)
         if not has_gvkey and gvkey_crosswalk is None:
             raise ValueError(f"{path} has no {GVKEY_COLUMN} column and no GVKEY crosswalk was given.")
@@ -320,13 +326,10 @@ def build_reproduced_panel(
             start_time_parse_failures += int((chunk["start_time"].notna() & quarter.isna()).sum())
             numeric = chunk[["risk", "nr_of_words"]].apply(pd.to_numeric, errors="coerce")
             words = numeric["nr_of_words"]
+            usable_score = numeric.abs().lt(float("inf")).all(axis=1) & words.gt(0)
+            invalid_score_rows += int((~usable_score).sum())
             valid = (
-                gvkey.notna()
-                & quarter.notna()
-                & quarter.between(quarter_start, quarter_end)
-                & words.notna()
-                & words.gt(0)
-                & numeric["risk"].notna()
+                gvkey.notna() & quarter.notna() & quarter.between(quarter_start, quarter_end) & usable_score
             )
             if not valid.any():
                 continue
@@ -351,12 +354,14 @@ def build_reproduced_panel(
         gvkey_note = (
             f", {rows_without_gvkey:,} calls without a crosswalk GVKEY" if crosswalk is not None else ""
         )
+        score_note = f", {invalid_score_rows:,} calls with unusable scores"
 
         if not country_parts:
             if logger is not None:
                 logger(
                     f"[rep {index}/{len(files)}] {code}: no usable rows, "
-                    f"{start_time_parse_failures:,} bad start_time values{gvkey_note} ({elapsed(start)})"
+                    f"{start_time_parse_failures:,} bad start_time values{gvkey_note}{score_note} "
+                    f"({elapsed(start)})"
                 )
             continue
 
@@ -397,7 +402,8 @@ def build_reproduced_panel(
             logger(
                 f"[rep {index}/{len(files)}] {code}: {rows_read:,} rows, "
                 f"{len(country_observed):,} observed gvkey-quarters, "
-                f"{len(country_filled):,} filled gvkey-quarters, {added:,} added{parse_note}{gvkey_note} "
+                f"{len(country_filled):,} filled gvkey-quarters, {added:,} added"
+                f"{parse_note}{gvkey_note}{score_note} "
                 f"({elapsed(start)})"
             )
 
