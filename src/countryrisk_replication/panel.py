@@ -300,6 +300,10 @@ def build_reproduced_panel(
             usecols=[key_column, "start_time", "risk", "nr_of_words"],
             dtype={key_column: str},
             keep_default_na=False,
+            # Infer each chunk's dtypes in one pass. A blank score leaves one low-memory block of
+            # text among numeric ones, and pandas 3 then fails while building its mixed-type
+            # warning under usecols. pd.to_numeric below turns the blank into a skipped row.
+            low_memory=False,
             chunksize=chunk_size,
             compression=csv_compression(path),
         ):
