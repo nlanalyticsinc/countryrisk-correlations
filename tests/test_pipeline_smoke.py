@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -34,6 +35,29 @@ LAYOUTS = ["legacy_flat", "dataset_bundle", "dataset_bundle_crosswalk", "series_
 CROSSWALK_LAYOUTS = {"dataset_bundle_crosswalk", "series_page_gzip"}
 SERIES_DIR = "01-countryrisk-argentina-v11-70ca2a2b"
 SERIES_PAGE_PREFIX = "NLA_2026-10-22T000000_countryrisk-argentina-v11_70ca2a2b"
+# Column order of the firm-level files in the October 2026 dataset ZIP.
+DOWNLOAD_COLUMNS = [
+    "earningscallID",
+    "company_name",
+    "event_name",
+    "start_time",
+    "risk",
+    "positive",
+    "negative",
+    "sentiment",
+    "nr_of_sentences",
+    "nr_of_words",
+    "permid",
+    "ric",
+    "tickersymbol",
+    "isin",
+    "cik",
+    "headquarterscountry",
+    "hqcountrycode",
+    "trbc",
+    "economic_sector",
+    "business_sector",
+]
 
 
 def write_synthetic_inputs(
@@ -179,6 +203,35 @@ def test_calls_missing_from_crosswalk_drop_out(tmp_path: Path) -> None:
     assert any("2 calls without a crosswalk GVKEY" in line for line in logs)
 
 
+def test_blank_score_late_in_a_large_file_is_skipped(tmp_path: Path) -> None:
+    # pandas parses a 20-column file in low-memory blocks of 32,768 rows. A blank nr_of_words
+    # in a later block, as in the October 2026 ZIP, made pandas 3 fail under usecols.
+    dta_file, reproduced_dir, label, _ = write_synthetic_inputs(tmp_path, "dataset_bundle_crosswalk")
+    path = reproduced_dir / "series" / label
+    calls = pd.read_csv(path, dtype=str)
+    filler = pd.DataFrame(
+        {
+            "earningscallID": [f"unmapped-{index}" for index in range(40_000)],
+            "start_time": calls.loc[0, "start_time"],
+            "risk": "0.1",
+            "nr_of_words": "1000",
+        }
+    )
+    filler.loc[filler.index[-1], "earningscallID"] = "call-1"
+    filler.loc[filler.index[-1], "risk"] = "99"
+    filler.loc[filler.index[-1], "nr_of_words"] = ""
+    panel = pd.concat([calls, filler], ignore_index=True)
+    panel.reindex(columns=DOWNLOAD_COLUMNS, fill_value="x").to_csv(path, index=False)
+    config = replace(
+        synthetic_config(dta_file, reproduced_dir, tmp_path / "correlations"), csv_chunk_size=250_000
+    )
+
+    result = run(config, logger=None)
+
+    assert result.gvkey_quarter_rows["n_pairs"].tolist() == [4, 4]
+    assert result.gvkey_quarter_rows["pearson"].tolist() == pytest.approx([1.0, 1.0])
+
+
 def test_crosswalk_from_another_download_is_rejected(tmp_path: Path) -> None:
     crosswalk = CROSSWALK.assign(earningscallID="other-" + CROSSWALK["earningscallID"])
     dta_file, reproduced_dir, _, _ = write_synthetic_inputs(tmp_path, "dataset_bundle_crosswalk", crosswalk)
@@ -234,3 +287,14 @@ def test_gvkeys_file_overrides_discovery(tmp_path: Path) -> None:
     )
 
     assert result.gvkey_quarter_rows["n_pairs"].tolist() == [4, 4]
+
+
+@pytest.mark.parametrize("chunk_size", [2, 100])
+def test_duplicate_original_keys_are_rejected_across_chunks(tmp_path: Path, chunk_size: int) -> None:
+    dta, reproduced, _, _ = write_synthetic_inputs(tmp_path, "legacy_flat")
+    original = pd.read_stata(dta)
+    pd.concat([original, original.iloc[[0]]], ignore_index=True).to_stata(dta, write_index=False, version=118)
+    config = replace(synthetic_config(dta, reproduced, tmp_path / "out"), dta_chunk_size=chunk_size)
+    with pytest.raises(ValueError, match="duplicate original firm-country-quarter") as error:
+        run(config, logger=None)
+    assert str(dta) in str(error.value)
