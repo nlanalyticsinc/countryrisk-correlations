@@ -9,7 +9,11 @@ from time import perf_counter
 
 import pandas as pd
 
-from countryrisk_replication.discovery import discover_reproduced_files
+from countryrisk_replication.discovery import (
+    GVKEY_COLUMN,
+    discover_gvkey_crosswalk,
+    discover_reproduced_files,
+)
 from countryrisk_replication.output import (
     GVKEY_QUARTER_FIELDS,
     QUARTER_FIELDS,
@@ -17,9 +21,14 @@ from countryrisk_replication.output import (
     write_csv,
     write_manifest,
 )
-from countryrisk_replication.panel import build_reproduced_panel, load_dta_panel, quarter_label
+from countryrisk_replication.panel import (
+    build_reproduced_panel,
+    load_dta_panel,
+    load_gvkey_crosswalk,
+    quarter_label,
+)
 from countryrisk_replication.stats import correlate_panels
-from countryrisk_replication.utils import ProgressLogger, default_logger, elapsed
+from countryrisk_replication.utils import ProgressLogger, csv_columns, default_logger, elapsed
 
 DATA_DIR = Path("data")
 DTA_FILE = DATA_DIR / "original/FirmCountryQuarter_withexposure.dta"
@@ -59,6 +68,8 @@ class RunConfig:
     countries: set[str] | None = None
     csv_chunk_size: int = 250_000
     dta_chunk_size: int = 500_000
+    # Used for firm-level files without a gvkey column; found next to them when None.
+    gvkeys_file: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +88,16 @@ def run(config: RunConfig, logger: ProgressLogger | None = default_logger) -> Ru
     country_ids = {code: index for index, code in enumerate(sorted(files), start=1)}
     if logger is not None:
         logger(f"Countries: {', '.join(sorted(files))}")
+    gvkey_crosswalk = None
+    if any(GVKEY_COLUMN not in csv_columns(path) for path in files.values()):
+        gvkey_crosswalk = load_gvkey_crosswalk(
+            config.gvkeys_file or discover_gvkey_crosswalk(config.reproduced_dir)
+        )
+        if logger is not None:
+            logger(
+                f"GVKEY crosswalk: {gvkey_crosswalk.path} "
+                f"({gvkey_crosswalk.gvkeys.notna().sum():,} calls with a GVKEY)"
+            )
 
     dta = load_dta_panel(
         config.dta_file,
@@ -94,6 +115,7 @@ def run(config: RunConfig, logger: ProgressLogger | None = default_logger) -> Ru
         dta.quarter_start,
         dta.quarter_end,
         logger=logger,
+        gvkey_crosswalk=gvkey_crosswalk,
     )
     if logger is not None:
         logger(f"Reproduced panel rows, union observed/filled: {len(reproduced.panel):,}")
@@ -126,6 +148,7 @@ def run(config: RunConfig, logger: ProgressLogger | None = default_logger) -> Ru
         reproduced_files=files,
         reproduced_row_counts=reproduced.row_counts,
         country_ids=country_ids,
+        gvkey_crosswalk=gvkey_crosswalk,
     )
     if logger is not None:
         logger(f"Wrote {gvkey_quarter_path}")

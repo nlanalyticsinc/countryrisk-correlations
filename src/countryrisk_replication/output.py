@@ -10,11 +10,13 @@ import pandas as pd
 
 from countryrisk_replication.discovery import (
     CODE_TO_COUNTRY_SLUG,
+    dataset_date,
     reproduced_file_label,
     reproduced_file_metadata,
 )
-from countryrisk_replication.panel import quarter_label
+from countryrisk_replication.panel import GvkeyCrosswalk, quarter_label
 from countryrisk_replication.stats import VARIANTS, QuarterSums, RunningStats
+from countryrisk_replication.utils import csv_compression
 
 GVKEY_QUARTER_FIELDS = [
     "country_code",
@@ -158,6 +160,7 @@ def write_manifest(
     reproduced_files: dict[str, Path],
     reproduced_row_counts: dict[int, int],
     country_ids: dict[str, int],
+    gvkey_crosswalk: GvkeyCrosswalk | None = None,
 ) -> None:
     rows = [
         {
@@ -188,10 +191,27 @@ def write_manifest(
                 "dataset_date": metadata.dataset_date,
                 "series_version": metadata.series_version,
                 "series_id": metadata.series_id,
-                "compression": metadata.compression,
+                "compression": csv_compression(reproduced_file) or "none",
                 "bytes": reproduced_file.stat().st_size,
                 "rows": reproduced_row_counts.get(country_id, ""),
                 "sha256": file_sha256(reproduced_file),
+            }
+        )
+    if gvkey_crosswalk is not None:
+        crosswalk_file = gvkey_crosswalk.path
+        rows.append(
+            {
+                "role": "gvkey_crosswalk",
+                "country_code": "",
+                "path": str(crosswalk_file),
+                "source_layout": "",
+                "dataset_date": dataset_date(crosswalk_file),
+                "series_version": "",
+                "series_id": "",
+                "compression": csv_compression(crosswalk_file) or "none",
+                "bytes": crosswalk_file.stat().st_size,
+                "rows": gvkey_crosswalk.rows,
+                "sha256": file_sha256(crosswalk_file),
             }
         )
     path.parent.mkdir(parents=True, exist_ok=True)

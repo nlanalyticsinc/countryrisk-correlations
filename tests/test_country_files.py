@@ -5,22 +5,39 @@ import pytest
 
 from countryrisk_replication.discovery import (
     country_code_from_reproduced_file,
+    discover_gvkey_crosswalk,
     discover_reproduced_files,
     reproduced_file_label,
     reproduced_file_metadata,
 )
 
+SERIES_DIR = "01-countryrisk-argentina-v11-70ca2a2b"
+SERIES_PAGE_FILE = "NLA_2026-10-22T000000_countryrisk-argentina-v11_70ca2a2b_firmlevel.csv"
 
-def write_firmlevel(path: Path, *, include_words: bool = True) -> None:
+
+def write_firmlevel(
+    path: Path,
+    *,
+    include_words: bool = True,
+    id_column: str = "gvkey",
+    compression: str = "infer",
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     data: dict[str, list[object]] = {
-        "gvkey": [1],
+        id_column: ["1" if id_column == "gvkey" else "call-1"],
         "start_time": ["2020-01-20 13:30:00.000000000Z"],
         "risk": [0.1],
     }
     if include_words:
         data["nr_of_words"] = [1000]
-    pd.DataFrame(data).to_csv(path, index=False, compression="infer")
+    pd.DataFrame(data).to_csv(path, index=False, compression=compression)
+
+
+def write_crosswalk(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"earningscallID": ["call-1"], "gvkey_compustat": ["000001"]}).to_csv(
+        path, index=False, compression="infer"
+    )
 
 
 def test_country_code_from_reproduced_file_parses_known_slug() -> None:
@@ -31,21 +48,17 @@ def test_country_code_from_reproduced_file_parses_known_slug() -> None:
 
 def test_country_code_from_packaged_file_parses_parent_series_directory() -> None:
     path = Path(
-        "nla_country-risk_dataset_2026-06-30/series/"
-        "01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz"
+        "nla_country-risk_dataset_2026-06-30/series/01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz"
     )
 
     assert country_code_from_reproduced_file(path) == "AR"
-    assert reproduced_file_label(path) == (
-        "01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz"
-    )
+    assert reproduced_file_label(path) == ("01-countryrisk-argentina-v11-70ca2a2b/firmlevel.csv.gz")
     metadata = reproduced_file_metadata(path)
     assert metadata is not None
     assert metadata.source_layout == "dataset_bundle"
     assert metadata.dataset_date == "2026-06-30"
     assert metadata.series_version == "11"
     assert metadata.series_id == "70ca2a2b"
-    assert metadata.compression == "gzip"
 
 
 def test_country_code_from_reproduced_file_rejects_malformed_name() -> None:
@@ -82,15 +95,8 @@ def test_discover_packaged_firmlevel_and_ignore_timeseries(tmp_path: Path, root_
 
 
 def test_discovery_rejects_duplicate_country_across_layouts(tmp_path: Path) -> None:
-    write_firmlevel(
-        tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv"
-    )
-    write_firmlevel(
-        tmp_path
-        / "series"
-        / "01-countryrisk-argentina-v11-70ca2a2b"
-        / "firmlevel.csv.gz"
-    )
+    write_firmlevel(tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv")
+    write_firmlevel(tmp_path / "series" / "01-countryrisk-argentina-v11-70ca2a2b" / "firmlevel.csv.gz")
 
     with pytest.raises(ValueError, match="Multiple reproduced firmlevel CSVs found for AR"):
         discover_reproduced_files(tmp_path, None, logger=None)
@@ -105,9 +111,65 @@ def test_discovery_rejects_missing_required_columns(tmp_path: Path) -> None:
 
 
 def test_discovery_reports_requested_countries_not_found(tmp_path: Path) -> None:
-    write_firmlevel(
-        tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv"
-    )
+    write_firmlevel(tmp_path / "NLA_2026-07-08T000000_countryrisk-argentina-v10_fixture_firmlevel.csv")
 
     with pytest.raises(FileNotFoundError, match="No usable country-risk firmlevel CSV found for: CL"):
         discover_reproduced_files(tmp_path, {"AR", "CL"}, logger=None)
+
+
+def test_discovery_accepts_call_ids_instead_of_gvkey(tmp_path: Path) -> None:
+    firmlevel = tmp_path / "series" / SERIES_DIR / "firmlevel.csv.gz"
+    write_firmlevel(firmlevel, id_column="earningscallID")
+
+    assert discover_reproduced_files(tmp_path, None, logger=None) == {"AR": firmlevel}
+
+
+def test_discovery_rejects_missing_gvkey_and_call_ids(tmp_path: Path) -> None:
+    write_firmlevel(tmp_path / SERIES_PAGE_FILE, id_column="permid")
+
+    with pytest.raises(ValueError, match="missing required columns: gvkey or earningscallID"):
+        discover_reproduced_files(tmp_path, None, logger=None)
+
+
+def test_discovery_reads_gzip_saved_as_csv(tmp_path: Path) -> None:
+    firmlevel = tmp_path / SERIES_PAGE_FILE
+    write_firmlevel(firmlevel, id_column="earningscallID", compression="gzip")
+
+    assert firmlevel.read_bytes()[:2] == b"\x1f\x8b"
+    assert discover_reproduced_files(tmp_path, None, logger=None) == {"AR": firmlevel}
+
+
+@pytest.mark.parametrize("root_kind", ["dataset", "series", "single-series"])
+def test_discover_gvkey_crosswalk_at_dataset_root(tmp_path: Path, root_kind: str) -> None:
+    dataset_root = tmp_path / "nla_country-risk_dataset_2026-10-22"
+    crosswalk = dataset_root / "gvkeys.csv.gz"
+    write_crosswalk(crosswalk)
+    write_firmlevel(dataset_root / "series" / SERIES_DIR / "firmlevel.csv.gz", id_column="earningscallID")
+    roots = {
+        "dataset": dataset_root,
+        "series": dataset_root / "series",
+        "single-series": dataset_root / "series" / SERIES_DIR,
+    }
+
+    assert discover_gvkey_crosswalk(roots[root_kind]) == crosswalk
+
+
+def test_discover_gvkey_crosswalk_from_series_page(tmp_path: Path) -> None:
+    crosswalk = tmp_path / SERIES_PAGE_FILE.replace("_firmlevel.csv", "_gvkeys.csv")
+    write_crosswalk(crosswalk)
+    write_firmlevel(tmp_path / SERIES_PAGE_FILE, id_column="earningscallID")
+
+    assert discover_gvkey_crosswalk(tmp_path) == crosswalk
+
+
+def test_discover_gvkey_crosswalk_requires_exactly_one(tmp_path: Path) -> None:
+    write_firmlevel(tmp_path / SERIES_PAGE_FILE, id_column="earningscallID")
+
+    with pytest.raises(FileNotFoundError, match="No GVKEY crosswalk found"):
+        discover_gvkey_crosswalk(tmp_path)
+
+    write_crosswalk(tmp_path / "gvkeys.csv")
+    write_crosswalk(tmp_path / SERIES_PAGE_FILE.replace("_firmlevel.csv", "_gvkeys.csv"))
+
+    with pytest.raises(ValueError, match="Multiple GVKEY crosswalks found"):
+        discover_gvkey_crosswalk(tmp_path)

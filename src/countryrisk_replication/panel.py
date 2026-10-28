@@ -9,10 +9,19 @@ from time import perf_counter
 
 import pandas as pd
 
-from countryrisk_replication.utils import ProgressLogger, default_logger, elapsed
+from countryrisk_replication.discovery import CALL_ID_COLUMN, GVKEY_COLUMN
+from countryrisk_replication.utils import (
+    ProgressLogger,
+    csv_columns,
+    csv_compression,
+    default_logger,
+    elapsed,
+)
 
 SCORE_SCALE = 100000.0
 QUARTER_DTYPE = "int32"
+CROSSWALK_GVKEY_COLUMN = "gvkey_compustat"
+MISSING_GVKEY_VALUES = {"", ".", "na", "n/a", "nan", "null", "none", "<na>"}
 
 
 @dataclass(frozen=True)
@@ -24,6 +33,13 @@ class ReproducedPanelResult:
 
 
 @dataclass(frozen=True)
+class GvkeyCrosswalk:
+    path: Path
+    gvkeys: pd.Series  # Nullable GVKEY by nonblank earningscallID, including unmapped calls.
+    rows: int
+
+
+@dataclass(frozen=True)
 class DtaPanelResult:
     panel: pd.DataFrame
     rows_by_country: dict[int, int]
@@ -32,9 +48,65 @@ class DtaPanelResult:
     quarter_end: int
 
 
-def normalize_gvkey_series(series: pd.Series) -> pd.Series:
-    values = pd.to_numeric(series, errors="coerce")
+def normalize_gvkey_series(
+    series: pd.Series,
+    *,
+    source: Path | None = None,
+    column: str = GVKEY_COLUMN,
+    first_data_row: int = 2,
+) -> pd.Series:
+    text = series.astype("string").str.strip()
+    text = text.mask(text.str.lower().isin(MISSING_GVKEY_VALUES))
+    values = pd.to_numeric(text.str.replace(r"\.0+$", "", regex=True), errors="coerce")
+    invalid = text.notna() & (
+        ~text.str.fullmatch(r"[0-9]+(?:\.0+)?").fillna(False) | values.isna() | values.ge(2**63)
+    )
+    if invalid.any():
+        index = invalid[invalid].index[0]
+        location = f"{source}: row {index + first_data_row}: " if source is not None else ""
+        raise ValueError(
+            f"{location}invalid {column} {series.loc[index]!r}; expected a nonnegative integer GVKEY "
+            "within the signed 64-bit range"
+        )
     return values.astype("Int64")
+
+
+def normalize_call_id_series(series: pd.Series) -> pd.Series:
+    values = series.astype("string").str.strip()
+    return values.mask(values.eq(""))
+
+
+def load_gvkey_crosswalk(path: Path) -> GvkeyCrosswalk:
+    """Read a measure's gvkeys.csv, which maps earningscallID to gvkey_compustat."""
+    missing = {CALL_ID_COLUMN, CROSSWALK_GVKEY_COLUMN}.difference(csv_columns(path))
+    if missing:
+        raise ValueError(f"{path} is missing required columns: {', '.join(sorted(missing))}")
+    frame = pd.read_csv(
+        path,
+        usecols=[CALL_ID_COLUMN, CROSSWALK_GVKEY_COLUMN],
+        dtype=str,
+        keep_default_na=False,
+        compression=csv_compression(path),
+    )
+    rows = len(frame)
+    frame[CALL_ID_COLUMN] = normalize_call_id_series(frame[CALL_ID_COLUMN])
+    frame = frame.dropna(subset=[CALL_ID_COLUMN])
+    pairs = pd.DataFrame(
+        {
+            "call_id": frame[CALL_ID_COLUMN],
+            "gvkey_num": normalize_gvkey_series(
+                frame[CROSSWALK_GVKEY_COLUMN], source=path, column=CROSSWALK_GVKEY_COLUMN
+            ),
+        }
+    )
+    known = pairs.dropna(subset=["gvkey_num"]).drop_duplicates()
+    conflicting = known.loc[known["call_id"].duplicated(), "call_id"]
+    if not conflicting.empty:
+        examples = ", ".join(conflicting.unique()[:3])
+        raise ValueError(f"{path} maps earningscallID values to more than one gvkey: {examples}")
+    # Retain membership for calls without a GVKEY; a nonmissing duplicate takes precedence.
+    gvkeys = known.set_index("call_id")["gvkey_num"].reindex(pairs["call_id"].drop_duplicates())
+    return GvkeyCrosswalk(path=path, gvkeys=gvkeys, rows=rows)
 
 
 def quarter_code_from_date_like(series: pd.Series) -> pd.Series:
@@ -95,7 +167,7 @@ def load_dta_panel(
         if chunk.empty:
             continue
         chunk["country_id"] = code.loc[chunk.index].map(country_ids).astype("Int64")
-        chunk["gvkey_num"] = normalize_gvkey_series(chunk["gvkey"])
+        chunk["gvkey_num"] = normalize_gvkey_series(chunk["gvkey"], source=dta_file, first_data_row=1)
         chunk["quarter_code"] = quarter_code_from_date_like(chunk["dateQ"])
         chunk["dta_risk"] = pd.to_numeric(chunk["CountryRisk"], errors="coerce")
         chunk = chunk[["country_id", "gvkey_num", "quarter_code", "dta_risk"]].dropna()
@@ -198,7 +270,12 @@ def build_reproduced_panel(
     quarter_start: int,
     quarter_end: int,
     logger: ProgressLogger | None = default_logger,
+    gvkey_crosswalk: GvkeyCrosswalk | None = None,
 ) -> ReproducedPanelResult:
+    """Read each country's firm-level file into gvkey-quarter means.
+
+    Files without a gvkey column take it from ``gvkey_crosswalk`` by earningscallID.
+    """
     panels: list[pd.DataFrame] = []
     observed_counts: dict[int, int] = {}
     filled_counts: dict[int, int] = {}
@@ -209,14 +286,32 @@ def build_reproduced_panel(
         country_parts: list[pd.DataFrame] = []
         rows_read = 0
         start_time_parse_failures = 0
+        has_gvkey = GVKEY_COLUMN in csv_columns(path)
+        if not has_gvkey and gvkey_crosswalk is None:
+            raise ValueError(f"{path} has no {GVKEY_COLUMN} column and no GVKEY crosswalk was given.")
+        crosswalk = None if has_gvkey else gvkey_crosswalk
+        key_column = GVKEY_COLUMN if crosswalk is None else CALL_ID_COLUMN
+        rows_without_gvkey = 0
+        rows_with_call_id = 0
+        crosswalk_matches = 0
 
         for chunk in pd.read_csv(
             path,
-            usecols=["gvkey", "start_time", "risk", "nr_of_words"],
+            usecols=[key_column, "start_time", "risk", "nr_of_words"],
+            dtype={key_column: str},
+            keep_default_na=False,
             chunksize=chunk_size,
+            compression=csv_compression(path),
         ):
             rows_read += len(chunk)
-            gvkey = normalize_gvkey_series(chunk["gvkey"])
+            if crosswalk is None:
+                gvkey = normalize_gvkey_series(chunk[GVKEY_COLUMN], source=path)
+            else:
+                call_ids = normalize_call_id_series(chunk[CALL_ID_COLUMN])
+                rows_with_call_id += int(call_ids.notna().sum())
+                crosswalk_matches += int(call_ids.isin(crosswalk.gvkeys.index).sum())
+                gvkey = call_ids.map(crosswalk.gvkeys).astype("Int64")
+                rows_without_gvkey += int(gvkey.isna().sum())
             quarter = quarter_code_from_date_like(chunk["start_time"])
             start_time_parse_failures += int((chunk["start_time"].notna() & quarter.isna()).sum())
             numeric = chunk[["risk", "nr_of_words"]].apply(pd.to_numeric, errors="coerce")
@@ -243,11 +338,21 @@ def build_reproduced_panel(
                 )
             )
 
+        reproduced_row_counts[country_ids[code]] = rows_read
+        if crosswalk is not None and rows_with_call_id and not crosswalk_matches:
+            raise ValueError(
+                f"No earningscallID in {path} is present in {crosswalk.path}; "
+                "use the crosswalk that came with the firm-level files."
+            )
+        gvkey_note = (
+            f", {rows_without_gvkey:,} calls without a crosswalk GVKEY" if crosswalk is not None else ""
+        )
+
         if not country_parts:
             if logger is not None:
                 logger(
                     f"[rep {index}/{len(files)}] {code}: no usable rows, "
-                    f"{start_time_parse_failures:,} bad start_time values ({elapsed(start)})"
+                    f"{start_time_parse_failures:,} bad start_time values{gvkey_note} ({elapsed(start)})"
                 )
             continue
 
@@ -274,7 +379,6 @@ def build_reproduced_panel(
         panels.append(country_panel)
         observed_counts[country_ids[code]] = len(country_observed)
         filled_counts[country_ids[code]] = len(country_filled)
-        reproduced_row_counts[country_ids[code]] = rows_read
 
         overlapping = country_observed.merge(
             country_filled[["country_id", "gvkey_num", "quarter_code"]],
@@ -289,7 +393,7 @@ def build_reproduced_panel(
             logger(
                 f"[rep {index}/{len(files)}] {code}: {rows_read:,} rows, "
                 f"{len(country_observed):,} observed gvkey-quarters, "
-                f"{len(country_filled):,} filled gvkey-quarters, {added:,} added{parse_note} "
+                f"{len(country_filled):,} filled gvkey-quarters, {added:,} added{parse_note}{gvkey_note} "
                 f"({elapsed(start)})"
             )
 
