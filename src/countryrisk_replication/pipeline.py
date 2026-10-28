@@ -96,7 +96,7 @@ def run(config: RunConfig, logger: ProgressLogger | None = default_logger) -> Ru
         if logger is not None:
             logger(
                 f"GVKEY crosswalk: {gvkey_crosswalk.path} "
-                f"({len(gvkey_crosswalk.gvkeys):,} calls with a GVKEY)"
+                f"({gvkey_crosswalk.gvkeys.notna().sum():,} calls with a GVKEY)"
             )
 
     dta = load_dta_panel(

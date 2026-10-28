@@ -21,6 +21,7 @@ from countryrisk_replication.utils import (
 SCORE_SCALE = 100000.0
 QUARTER_DTYPE = "int32"
 CROSSWALK_GVKEY_COLUMN = "gvkey_compustat"
+MISSING_GVKEY_VALUES = {"", ".", "na", "n/a", "nan", "null", "none", "<na>"}
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,7 @@ class ReproducedPanelResult:
 @dataclass(frozen=True)
 class GvkeyCrosswalk:
     path: Path
-    gvkeys: pd.Series  # gvkey by earningscallID; calls without a GVKEY are left out
+    gvkeys: pd.Series  # Nullable GVKEY by nonblank earningscallID, including unmapped calls.
     rows: int
 
 
@@ -47,9 +48,32 @@ class DtaPanelResult:
     quarter_end: int
 
 
-def normalize_gvkey_series(series: pd.Series) -> pd.Series:
-    values = pd.to_numeric(series, errors="coerce")
+def normalize_gvkey_series(
+    series: pd.Series,
+    *,
+    source: Path | None = None,
+    column: str = GVKEY_COLUMN,
+    first_data_row: int = 2,
+) -> pd.Series:
+    text = series.astype("string").str.strip()
+    text = text.mask(text.str.lower().isin(MISSING_GVKEY_VALUES))
+    values = pd.to_numeric(text.str.replace(r"\.0+$", "", regex=True), errors="coerce")
+    invalid = text.notna() & (
+        ~text.str.fullmatch(r"[0-9]+(?:\.0+)?").fillna(False) | values.isna() | values.ge(2**63)
+    )
+    if invalid.any():
+        index = invalid[invalid].index[0]
+        location = f"{source}: row {index + first_data_row}: " if source is not None else ""
+        raise ValueError(
+            f"{location}invalid {column} {series.loc[index]!r}; expected a nonnegative integer GVKEY "
+            "within the signed 64-bit range"
+        )
     return values.astype("Int64")
+
+
+def normalize_call_id_series(series: pd.Series) -> pd.Series:
+    values = series.astype("string").str.strip()
+    return values.mask(values.eq(""))
 
 
 def load_gvkey_crosswalk(path: Path) -> GvkeyCrosswalk:
@@ -61,20 +85,28 @@ def load_gvkey_crosswalk(path: Path) -> GvkeyCrosswalk:
         path,
         usecols=[CALL_ID_COLUMN, CROSSWALK_GVKEY_COLUMN],
         dtype=str,
+        keep_default_na=False,
         compression=csv_compression(path),
     )
+    rows = len(frame)
+    frame[CALL_ID_COLUMN] = normalize_call_id_series(frame[CALL_ID_COLUMN])
+    frame = frame.dropna(subset=[CALL_ID_COLUMN])
     pairs = pd.DataFrame(
         {
-            "call_id": frame[CALL_ID_COLUMN].str.strip(),
-            "gvkey_num": normalize_gvkey_series(frame[CROSSWALK_GVKEY_COLUMN]),
+            "call_id": frame[CALL_ID_COLUMN],
+            "gvkey_num": normalize_gvkey_series(
+                frame[CROSSWALK_GVKEY_COLUMN], source=path, column=CROSSWALK_GVKEY_COLUMN
+            ),
         }
     )
-    pairs = pairs.dropna().drop_duplicates()
-    conflicting = pairs.loc[pairs["call_id"].duplicated(), "call_id"]
+    known = pairs.dropna(subset=["gvkey_num"]).drop_duplicates()
+    conflicting = known.loc[known["call_id"].duplicated(), "call_id"]
     if not conflicting.empty:
         examples = ", ".join(conflicting.unique()[:3])
         raise ValueError(f"{path} maps earningscallID values to more than one gvkey: {examples}")
-    return GvkeyCrosswalk(path=path, gvkeys=pairs.set_index("call_id")["gvkey_num"], rows=len(frame))
+    # Retain membership for calls without a GVKEY; a nonmissing duplicate takes precedence.
+    gvkeys = known.set_index("call_id")["gvkey_num"].reindex(pairs["call_id"].drop_duplicates())
+    return GvkeyCrosswalk(path=path, gvkeys=gvkeys, rows=rows)
 
 
 def quarter_code_from_date_like(series: pd.Series) -> pd.Series:
@@ -135,7 +167,7 @@ def load_dta_panel(
         if chunk.empty:
             continue
         chunk["country_id"] = code.loc[chunk.index].map(country_ids).astype("Int64")
-        chunk["gvkey_num"] = normalize_gvkey_series(chunk["gvkey"])
+        chunk["gvkey_num"] = normalize_gvkey_series(chunk["gvkey"], source=dta_file, first_data_row=1)
         chunk["quarter_code"] = quarter_code_from_date_like(chunk["dateQ"])
         chunk["dta_risk"] = pd.to_numeric(chunk["CountryRisk"], errors="coerce")
         chunk = chunk[["country_id", "gvkey_num", "quarter_code", "dta_risk"]].dropna()
@@ -260,19 +292,25 @@ def build_reproduced_panel(
         crosswalk = None if has_gvkey else gvkey_crosswalk
         key_column = GVKEY_COLUMN if crosswalk is None else CALL_ID_COLUMN
         rows_without_gvkey = 0
+        rows_with_call_id = 0
+        crosswalk_matches = 0
 
         for chunk in pd.read_csv(
             path,
             usecols=[key_column, "start_time", "risk", "nr_of_words"],
-            dtype=None if crosswalk is None else {CALL_ID_COLUMN: str},
+            dtype={key_column: str},
+            keep_default_na=False,
             chunksize=chunk_size,
             compression=csv_compression(path),
         ):
             rows_read += len(chunk)
             if crosswalk is None:
-                gvkey = normalize_gvkey_series(chunk[GVKEY_COLUMN])
+                gvkey = normalize_gvkey_series(chunk[GVKEY_COLUMN], source=path)
             else:
-                gvkey = chunk[CALL_ID_COLUMN].str.strip().map(crosswalk.gvkeys).astype("Int64")
+                call_ids = normalize_call_id_series(chunk[CALL_ID_COLUMN])
+                rows_with_call_id += int(call_ids.notna().sum())
+                crosswalk_matches += int(call_ids.isin(crosswalk.gvkeys.index).sum())
+                gvkey = call_ids.map(crosswalk.gvkeys).astype("Int64")
                 rows_without_gvkey += int(gvkey.isna().sum())
             quarter = quarter_code_from_date_like(chunk["start_time"])
             start_time_parse_failures += int((chunk["start_time"].notna() & quarter.isna()).sum())
@@ -300,9 +338,10 @@ def build_reproduced_panel(
                 )
             )
 
-        if crosswalk is not None and rows_read and rows_without_gvkey == rows_read:
+        reproduced_row_counts[country_ids[code]] = rows_read
+        if crosswalk is not None and rows_with_call_id and not crosswalk_matches:
             raise ValueError(
-                f"No earningscallID in {path} has a GVKEY in {crosswalk.path}; "
+                f"No earningscallID in {path} is present in {crosswalk.path}; "
                 "use the crosswalk that came with the firm-level files."
             )
         gvkey_note = (
@@ -340,7 +379,6 @@ def build_reproduced_panel(
         panels.append(country_panel)
         observed_counts[country_ids[code]] = len(country_observed)
         filled_counts[country_ids[code]] = len(country_filled)
-        reproduced_row_counts[country_ids[code]] = rows_read
 
         overlapping = country_observed.merge(
             country_filled[["country_id", "gvkey_num", "quarter_code"]],

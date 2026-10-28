@@ -111,6 +111,10 @@ Firm-level files downloaded since the October 2026 refresh have no `gvkey` colum
 
 For a firm-level file without `gvkey`, the pipeline joins `gvkey_compustat` on `earningscallID`. Calls without a GVKEY in the crosswalk drop out, as calls with a blank `gvkey` always have; the log reports how many. Files that carry `gvkey`, such as the June 2026 package behind the table above, are read as before and ignore the crosswalk. To use a crosswalk stored elsewhere, pass `--gvkeys-file`.
 
+Call IDs are trimmed, and blank IDs are ignored. Crosswalk overlap is checked using call IDs, including calls whose GVKEY is missing; a file with nonblank call IDs that are all absent from the crosswalk fails. A country with no usable GVKEYs is skipped, allowing other countries to run.
+
+GVKEYs accept digits with an optional all-zero decimal part (`001004`, `1004`, `1004.0`), within the signed 64-bit range. Blank values and the case-insensitive markers `.`, `NA`, `N/A`, `NaN`, `NULL`, `None`, and `<NA>` mean missing. Malformed nonmissing GVKEYs fail with the source file and row number. These rules apply to the crosswalk and both original and reproduced inputs.
+
 Each reproduced NLA firm-level CSV must contain `start_time`, `risk`, `nr_of_words`, and either `gvkey` or `earningscallID`. The version tag and series identifier are recorded as provenance but do not select different scoring logic. Discovery fails rather than mixing two files for the same country.
 
 ## Paper Code Provenance

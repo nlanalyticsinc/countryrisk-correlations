@@ -183,8 +183,34 @@ def test_crosswalk_from_another_download_is_rejected(tmp_path: Path) -> None:
     crosswalk = CROSSWALK.assign(earningscallID="other-" + CROSSWALK["earningscallID"])
     dta_file, reproduced_dir, _, _ = write_synthetic_inputs(tmp_path, "dataset_bundle_crosswalk", crosswalk)
 
-    with pytest.raises(ValueError, match="No earningscallID in .* has a GVKEY"):
+    with pytest.raises(ValueError, match="No earningscallID in .* is present"):
         run(synthetic_config(dta_file, reproduced_dir, tmp_path / "correlations"), logger=None)
+
+
+def test_invalid_legacy_gvkey_reports_row_across_chunks(tmp_path: Path) -> None:
+    dta_file, reproduced_dir, label, _ = write_synthetic_inputs(tmp_path, "legacy_flat")
+    path = reproduced_dir / label
+    calls = pd.read_csv(path, dtype=str)
+    calls.loc[2, "gvkey"] = "broken"
+    calls.to_csv(path, index=False)
+
+    with pytest.raises(ValueError, match="row 4: invalid gvkey") as error:
+        run(synthetic_config(dta_file, reproduced_dir, tmp_path / "correlations"), logger=None)
+
+    assert str(path) in str(error.value)
+
+
+def test_invalid_original_gvkey_reports_file_and_row(tmp_path: Path) -> None:
+    dta_file, reproduced_dir, _, _ = write_synthetic_inputs(tmp_path, "legacy_flat")
+    original = pd.read_stata(dta_file)
+    original["gvkey"] = original["gvkey"].astype("float64")
+    original.loc[1, "gvkey"] = 1.5
+    original.to_stata(dta_file, write_index=False, version=118)
+
+    with pytest.raises(ValueError, match="row 2: invalid gvkey") as error:
+        run(synthetic_config(dta_file, reproduced_dir, tmp_path / "correlations"), logger=None)
+
+    assert str(dta_file) in str(error.value)
 
 
 def test_missing_crosswalk_fails_before_reading_the_dta(tmp_path: Path) -> None:
